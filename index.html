@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MaxMovies - Stream & Download</title>
+    <meta name="description" content="Free movie and series streaming app">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/utilities.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/main.css">
+
+    <!-- External Lib (Allowed) -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="logo" onclick="window.location.hash = '#home'">MaxMovies</div>
+        <div class="nav-links desktop-only">
+            <a href="#home">Home</a>
+            <a href="#search">Search</a>
+            <a href="#library">Library</a>
+            <a href="#downloads">Downloads</a>
+        </div>
+        <div class="nav-icons">
+            <button id="mockToggleBtn" class="btn-icon" title="Toggle Mock Mode">📡</button>
+            <a href="#settings" class="btn-icon">⚙️</a>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main id="app-container">
+        <!-- Sections are injected here by router.js -->
+    </main>
+
+    <!-- Mobile Bottom Nav -->
+    <div class="mobile-nav">
+        <a href="#home">🏠<br>Home</a>
+        <a href="#search">🔍<br>Search</a>
+        <a href="#library">📚<br>Lib</a>
+        <a href="#downloads">⬇️<br>Down</a>
+    </div>
+
+    <!-- Global Modals/Toast -->
+    <div id="toast-container"></div>
+    
+    <div id="modal-overlay" class="hidden">
+        <div class="modal-content">
+            <button class="close-modal">&times;</button>
+            <div id="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
