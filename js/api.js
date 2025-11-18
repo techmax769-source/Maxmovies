@@ -5,26 +5,37 @@ const BASE_URL = 'https://movieapi.giftedtech.co.ke/api';
 
 export const api = {
     async fetch(endpoint) {
+        // 1. If Mock Mode is ON, skip the network entirely
         if (state.mockMode) return this.mockFetch(endpoint);
 
         try {
-            const response = await fetch(`${BASE_URL}${endpoint}`);
+            // 2. Add a 5-second timeout. 
+            // If the API doesn't answer in 5s, we cancel it and show mock data.
+            // This fixes the "Blank Screen" issue on slow connections.
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            const response = await fetch(`${BASE_URL}${endpoint}`, {
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId); // Clear timeout if successful
+
             if (!response.ok) throw new Error(`API Error: ${response.status}`);
             return await response.json();
+
         } catch (error) {
-            console.error(error);
-            showToast('Network error. Switching to Mock data.', 'error');
-            return this.mockFetch(endpoint); // Fallback
+            console.warn('Network error or Timeout. Switching to Mock data.', error);
+            showToast('Network issue. Switched to Offline Mode.', 'error');
+            return this.mockFetch(endpoint); // Automatic Fallback
         }
     },
 
     async search(query, page = 1, type = 'movie') {
-        // endpoint: /api/search/{query}?page={page}&type={movie|serie}
         return this.fetch(`/search/${query}?page=${page}&type=${type}`);
     },
 
     async getInfo(id) {
-        // endpoint: /api/info/{id}
         return this.fetch(`/info/${id}`);
     },
 
@@ -36,15 +47,14 @@ export const api = {
         return this.fetch(url);
     },
 
-    // ... inside js/api.js
-
-    // Mock Data Handler
+    // FIXED MOCK DATA HANDLER
     async mockFetch(endpoint) {
-        await new Promise(r => setTimeout(r, 500)); // Simulate latency
+        // Simulate a short loading delay so you see the skeleton loader
+        await new Promise(r => setTimeout(r, 500)); 
         
-        // FIX: Use standard fetch instead of import assert
-        // Note: Paths are relative to index.html, not this js file
         try {
+            // We check the requested endpoint and return the local JSON file
+            // Note: Paths are relative to index.html
             if (endpoint.includes('/search')) {
                 const res = await fetch('./mock/search.json');
                 return await res.json();
@@ -58,7 +68,7 @@ export const api = {
                 return await res.json();
             }
         } catch (e) {
-            console.error("Mock data missing:", e);
+            console.error("Mock data load failed. Check /mock/ folder.", e);
             return {};
         }
         
