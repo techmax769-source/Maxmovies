@@ -1,0 +1,20 @@
+.hidden { display: none !important; }
+.flex { display: flex; }
+.grid { display: grid; }
+.center { display: flex; justify-content: center; align-items: center; }
+.flex-col { flex-direction: column; }
+.gap-1 { gap: 1rem; }
+.p-1 { padding: 1rem; }
+.m-1 { margin: 1rem; }
+.text-center { text-align: center; }
+.w-full { width: 100%; }
+.relative { position: relative; }
+
+/* Loaders */
+.skeleton {
+    background: linear-gradient(90deg, #222 25%, #333 50%, #222 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+}
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
