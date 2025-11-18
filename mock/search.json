@@ -1,0 +1,6 @@
+{
+    "results": [
+        { "id": "m1", "title": "Cyber Dystopia", "year": "2024", "type": "movie", "poster": "https://via.placeholder.com/300x450?text=Cyber+Movie" },
+        { "id": "s1", "title": "Space Colony", "year": "2023", "type": "series", "poster": "https://via.placeholder.com/300x450?text=Space+Series" }
+    ]
+}
