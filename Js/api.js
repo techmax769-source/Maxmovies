@@ -36,13 +36,31 @@ export const api = {
         return this.fetch(url);
     },
 
+    // ... inside js/api.js
+
     // Mock Data Handler
     async mockFetch(endpoint) {
         await new Promise(r => setTimeout(r, 500)); // Simulate latency
         
-        if (endpoint.includes('/search')) return (await import('../mock/search.json', { assert: { type: 'json' } })).default;
-        if (endpoint.includes('/info')) return (await import('../mock/info.json', { assert: { type: 'json' } })).default;
-        if (endpoint.includes('/sources')) return (await import('../mock/sources.json', { assert: { type: 'json' } })).default;
+        // FIX: Use standard fetch instead of import assert
+        // Note: Paths are relative to index.html, not this js file
+        try {
+            if (endpoint.includes('/search')) {
+                const res = await fetch('./mock/search.json');
+                return await res.json();
+            }
+            if (endpoint.includes('/info')) {
+                const res = await fetch('./mock/info.json');
+                return await res.json();
+            }
+            if (endpoint.includes('/sources')) {
+                const res = await fetch('./mock/sources.json');
+                return await res.json();
+            }
+        } catch (e) {
+            console.error("Mock data missing:", e);
+            return {};
+        }
         
         return {};
     }
