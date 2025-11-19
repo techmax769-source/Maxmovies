@@ -3,18 +3,12 @@ import { initPlayer, destroyPlayer } from './player.js';
 import { startDownload } from './downloads.js';
 import { createCard, renderLoader, showToast } from './ui.js';
 import { db } from './storage.js';
-// FIX: Import state correctly to avoid undefined history errors
 import { state, addToHistory } from './state.js'; 
 
 const container = document.getElementById('app-container');
 
 export const router = async () => {
-    // Try to cleanup video player when switching pages
-    try {
-        destroyPlayer(); 
-    } catch (e) { 
-        console.log('Player cleanup ignored'); 
-    }
+    try { destroyPlayer(); } catch (e) {}
 
     const hash = window.location.hash.slice(1) || 'home';
     const params = hash.split('/');
@@ -44,11 +38,16 @@ async function renderHome() {
     try {
         const data = await api.search('action', 1, 'movie'); 
         const grid = document.getElementById(gridId);
-        grid.innerHTML = ''; 
+        grid.innerHTML = '';
 
-        // FIX: Strict check to ensure data.results is actually an Array (List)
-        // This prevents "data.results.forEach is not a function" error
-        if (!data || !data.results || !Array.isArray(data.results) || data.results.length === 0) {
+        // FIXED: Support BOTH API styles — data.results[] OR data.data[]
+        const list = Array.isArray(data?.results)
+            ? data.results
+            : Array.isArray(data?.data)
+                ? data.data
+                : null;
+
+        if (!list || list.length === 0) {
             console.warn("API returned invalid data:", data);
             grid.innerHTML = `
                 <div class="p-1 text-center" style="grid-column: 1/-1;">
@@ -61,11 +60,9 @@ async function renderHome() {
             return;
         }
 
-        data.results.forEach(item => grid.appendChild(createCard(item)));
+        list.forEach(item => grid.appendChild(createCard(item)));
 
     } catch (err) {
-        console.error("Render Error:", err);
-        // PRINT ERROR ON SCREEN FOR MOBILE DEBUGGING
         document.getElementById(gridId).innerHTML = `
             <div class="p-1" style="color: red; word-break: break-all;">
                 <h3>❌ Error</h3>
@@ -98,9 +95,16 @@ async function renderSearch() {
             try {
                 const data = await api.search(query);
                 grid.innerHTML = '';
+
+                // FIXED: Support both formats
+                const list = Array.isArray(data?.results)
+                    ? data.results
+                    : Array.isArray(data?.data)
+                        ? data.data
+                        : null;
                 
-                if(data && data.results && Array.isArray(data.results) && data.results.length > 0) {
-                    data.results.forEach(item => grid.appendChild(createCard(item)));
+                if (list && list.length > 0) {
+                    list.forEach(item => grid.appendChild(createCard(item)));
                 } else {
                     grid.innerHTML = '<p class="p-1">No results found</p>';
                 }
@@ -192,7 +196,6 @@ async function renderPlayerPage(id, season, episode) {
 async function renderDownloads() {
     try {
         const items = await db.getAll();
-        // FIX: Safe check (items || []) to prevent map error
         const safeItems = items || [];
 
         container.innerHTML = `
@@ -227,7 +230,6 @@ async function renderDownloads() {
 }
 
 async function renderLibrary() {
-    // FIX: Use the state imported at the top, handle undefined history
     const history = state.history || [];
 
     container.innerHTML = `
