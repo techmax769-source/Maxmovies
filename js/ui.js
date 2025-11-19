@@ -13,19 +13,37 @@ export const showToast = (message, type = 'info') => {
 };
 
 export const createCard = (item) => {
+    // FIX: API uses subject_id, id, or imdb_id
+    const safeId = item.subject_id || item.id || item.imdb_id;
+
+    // FIX: poster sometimes comes as "cover" in your API
+    const thumbnail = item.poster || item.cover || 'assets/placeholder.jpg';
+
     const div = document.createElement('div');
     div.className = 'card';
     div.innerHTML = `
-        <img src="${item.poster || 'assets/placeholder.jpg'}" alt="${item.title}" loading="lazy">
+        <img src="${thumbnail}" alt="${item.title}" loading="lazy">
         <div class="card-info">
             <div class="card-title">${item.title}</div>
-            <div class="card-year">${item.year || 'N/A'} • ${item.type}</div>
+            <div class="card-year">${item.year || 'N/A'} • ${item.type || ''}</div>
         </div>
     `;
-    div.onclick = () => window.location.hash = `#info/${item.id}`;
+
+    div.onclick = () => {
+        if (!safeId) {
+            console.error("Item has no valid ID:", item);
+            return showToast("Invalid ID for this item", "error");
+        }
+        window.location.hash = `#info/${safeId}`;
+    };
+
     return div;
 };
 
 export const renderLoader = (container) => {
-    container.innerHTML = `<div class="flex center" style="height:200px"><div class="skeleton" style="width:100px; height:100px"></div></div>`;
+    container.innerHTML = `
+        <div class="flex center" style="height:200px">
+            <div class="skeleton" style="width:100px; height:100px"></div>
+        </div>
+    `;
 };
