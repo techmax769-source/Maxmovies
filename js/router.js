@@ -41,7 +41,7 @@ export const router = async () => {
 };
 
 
-// --- Page Renderers ---
+// --- UPDATED renderHome (your version) ---
 
 async function renderHome() {
     console.log('[Home] Rendering home page');
@@ -54,40 +54,48 @@ async function renderHome() {
     renderLoader(document.getElementById(gridId));
 
     try {
-        console.log('[Home] Fetching trending content…');
+        // Fetch data
+        console.log('[Home] Fetching trending content...');
         const data = await api.search('action', 1, 'movie');
-
-        console.log('[Home] API response:', data);
+        console.log('[Home] API Response:', data);
 
         const grid = document.getElementById(gridId);
         grid.innerHTML = '';
 
-        if (!data || !data.results || data.results.length === 0) {
-            console.warn('[Home] No content returned');
+        // --- FIX YOU REQUESTED ---
+        if (!data || !data.results || !Array.isArray(data.results) || data.results.length === 0) {
+            console.error("Bad Data Received:", data);
             grid.innerHTML = `
                 <div class="p-1 text-center" style="grid-column: 1/-1;">
                     <p>No content found.</p>
-                    <button class="btn" onclick="window.location.reload()">Retry Connection</button>
+                    <small style="color:grey">
+                        Server returned: ${data && data.results ? typeof data.results : 'Nothing'}
+                    </small>
+                    <br><br>
+                    <button class="btn" onclick="window.location.reload()">Retry</button>
                 </div>
             `;
             return;
         }
 
+        // If valid, render results
         data.results.forEach(item => {
             grid.appendChild(createCard(item));
         });
 
     } catch (err) {
-        console.error('[Home] Render Error:', err);
+        console.error("Render Error:", err);
         document.getElementById(gridId).innerHTML = `
-            <div class="p-1" style="color: red; word-break: break-all;">
-                <h3>❌ Error:</h3>
+            <div class="p-1" style="color: red;">
+                <h3>Error</h3>
                 <p>${err.message}</p>
-                <p>${err.stack?.slice(0, 150) || ''}</p>
             </div>
         `;
     }
 }
+
+
+// --- Page Renderers (unchanged debug versions) ---
 
 async function renderSearch() {
     console.log('[Search] Render search page');
