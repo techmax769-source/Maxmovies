@@ -40,15 +40,17 @@ async function renderHome() {
         const grid = document.getElementById(gridId);
         grid.innerHTML = '';
 
-        // FIXED: Support BOTH API styles — data.results[] OR data.data[]
-        const list = Array.isArray(data?.results)
-            ? data.results
-            : Array.isArray(data?.data)
-                ? data.data
-                : null;
+        // ⭐ FIXED: Universal extraction (works with ANY API)
+        const list =
+            Array.isArray(data) ? data :
+            Array.isArray(data?.results) ? data.results :
+            Array.isArray(data?.data) ? data.data :
+            Array.isArray(data?.movies) ? data.movies :
+            Array.isArray(data?.items) ? data.items :
+            (typeof data === 'object' ? Object.values(data).filter(v => typeof v === 'object') : null);
 
-        if (!list || list.length === 0) {
-            console.warn("API returned invalid data:", data);
+        if (!list || !Array.isArray(list) || list.length === 0) {
+            console.warn("API returned invalid data structure:", data);
             grid.innerHTML = `
                 <div class="p-1 text-center" style="grid-column: 1/-1;">
                     <p>No content found.</p>
@@ -96,14 +98,16 @@ async function renderSearch() {
                 const data = await api.search(query);
                 grid.innerHTML = '';
 
-                // FIXED: Support both formats
-                const list = Array.isArray(data?.results)
-                    ? data.results
-                    : Array.isArray(data?.data)
-                        ? data.data
-                        : null;
-                
-                if (list && list.length > 0) {
+                // ⭐ FIXED: Universal extraction
+                const list =
+                    Array.isArray(data) ? data :
+                    Array.isArray(data?.results) ? data.results :
+                    Array.isArray(data?.data) ? data.data :
+                    Array.isArray(data?.movies) ? data.movies :
+                    Array.isArray(data?.items) ? data.items :
+                    (typeof data === 'object' ? Object.values(data).filter(v => typeof v === 'object') : null);
+
+                if (list && Array.isArray(list) && list.length > 0) {
                     list.forEach(item => grid.appendChild(createCard(item)));
                 } else {
                     grid.innerHTML = '<p class="p-1">No results found</p>';
