@@ -1,6 +1,33 @@
 {
-    "results": [
-        { "id": "m1", "title": "Cyber Dystopia", "year": "2024", "type": "movie", "poster": "https://via.placeholder.com/300x450?text=Cyber+Movie" },
-        { "id": "s1", "title": "Space Colony", "year": "2023", "type": "series", "poster": "https://via.placeholder.com/300x450?text=Space+Series" }
+  "status": 200,
+  "success": "true",
+  "creator": "GiftedTech",
+  "results": {
+    "pager": {
+      "page": 1,
+      "per_page": 20,
+      "total_pages": 1,
+      "total_items": 2
+    },
+    "items": [
+      {
+        "id": "m1",
+        "title": "Cyber Dystopia",
+        "year": "2024",
+        "type": "movie",
+        "poster": "https://via.placeholder.com/300x450?text=Cyber+Movie",
+        "rating": "8.5",
+        "description": "A futuristic thriller about AI taking over the world's movie APIs."
+      },
+      {
+        "id": "s1",
+        "title": "Space Colony",
+        "year": "2023",
+        "type": "series",
+        "poster": "https://via.placeholder.com/300x450?text=Space+Series",
+        "rating": "8.0",
+        "description": "Sci-fi drama on a distant orbital colony."
+      }
     ]
+  }
 }
