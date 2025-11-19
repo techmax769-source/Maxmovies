@@ -1,16 +1,16 @@
 import { api } from './api.js';
-// import { ui } from './ui.js';  <-- I REMOVED THE BAD LINE
 import { initPlayer, destroyPlayer } from './player.js';
 import { startDownload } from './downloads.js';
 import { createCard, renderLoader, showToast } from './ui.js';
 import { db } from './storage.js';
-import { addToHistory } from './state.js';
+// FIX 1: Import 'state' directly at the top so we don't mess up imports later
+import { state, addToHistory } from './state.js'; 
 
 const container = document.getElementById('app-container');
 
 export const router = async () => {
     try {
-        destroyPlayer(); // Cleanup player if leaving page
+        destroyPlayer(); 
     } catch (e) { console.log('Player cleanup ignored'); }
 
     const hash = window.location.hash.slice(1) || 'home';
@@ -127,7 +127,6 @@ async function renderInfo(id) {
     `;
 
     document.getElementById('playBtn').onclick = () => {
-        // Default to movie player unless it's explicitly a series
         if(info.type === 'movie' || !info.type) window.location.hash = `#player/${id}`;
     };
 
@@ -159,12 +158,13 @@ async function renderPlayerPage(id, season, episode) {
 
 async function renderDownloads() {
     const items = await db.getAll();
+    // FIX 2: Added (items || []) to prevent crash if items is undefined
     container.innerHTML = `
         <div class="p-1">
             <h2>Downloads</h2>
-            ${items.length === 0 ? '<p>No downloads yet.</p>' : ''}
+            ${(!items || items.length === 0) ? '<p>No downloads yet.</p>' : ''}
             <div class="media-grid">
-                ${items.map(item => `
+                ${(items || []).map(item => `
                     <div class="card" onclick="playOffline('${item.id}')">
                         <img src="${item.poster}" style="opacity:0.7">
                         <div class="card-info"><div class="card-title">${item.title}</div></div>
@@ -188,10 +188,13 @@ async function renderDownloads() {
 }
 
 async function renderLibrary() {
-    const { history } = await import('./state.js');
+    // FIX 3: Removed incorrect dynamic import. Using the top-level 'state' import.
+    const history = state.history || []; 
+
     container.innerHTML = `
         <div class="p-1">
             <h2>Recently Watched</h2>
+            ${history.length === 0 ? '<p>No history yet.</p>' : ''}
             <div class="media-grid">
                  ${history.map(item => `
                     <div class="card" onclick="location.hash='#info/${item.id}'">
