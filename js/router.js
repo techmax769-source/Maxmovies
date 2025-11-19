@@ -1,5 +1,5 @@
 import { api } from './api.js';
-import { ui } from './ui.js';
+// import { ui } from './ui.js';  <-- I REMOVED THE BAD LINE
 import { initPlayer, destroyPlayer } from './player.js';
 import { startDownload } from './downloads.js';
 import { createCard, renderLoader, showToast } from './ui.js';
@@ -9,7 +9,10 @@ import { addToHistory } from './state.js';
 const container = document.getElementById('app-container');
 
 export const router = async () => {
-    destroyPlayer(); // Cleanup player if leaving page
+    try {
+        destroyPlayer(); // Cleanup player if leaving page
+    } catch (e) { console.log('Player cleanup ignored'); }
+
     const hash = window.location.hash.slice(1) || 'home';
     const params = hash.split('/');
     const route = params[0];
@@ -28,17 +31,33 @@ export const router = async () => {
 // --- Page Renderers ---
 
 async function renderHome() {
+    const gridId = 'trending-grid';
     container.innerHTML = `
         <div class="hero p-1"><h1>Trending Now</h1></div>
-        <div id="trending-grid" class="media-grid"></div>
+        <div id="${gridId}" class="media-grid"></div>
     `;
-    
-    renderLoader(document.getElementById('trending-grid'));
-    const data = await api.search('action', 1, 'movie'); // Default discovery
-    
-    const grid = document.getElementById('trending-grid');
-    grid.innerHTML = '';
-    data.results?.forEach(item => grid.appendChild(createCard(item)));
+    renderLoader(document.getElementById(gridId));
+
+    try {
+        const data = await api.search('action', 1, 'movie'); 
+        const grid = document.getElementById(gridId);
+        grid.innerHTML = ''; 
+
+        if (!data || !data.results || data.results.length === 0) {
+            grid.innerHTML = `
+                <div class="p-1 text-center" style="grid-column: 1/-1;">
+                    <p>No content found.</p>
+                    <button class="btn" onclick="window.location.reload()">Retry Connection</button>
+                </div>
+            `;
+            return;
+        }
+
+        data.results.forEach(item => grid.appendChild(createCard(item)));
+    } catch (err) {
+        console.error("Render Error:", err);
+        document.getElementById(gridId).innerHTML = '<p class="p-1">App Error. See console.</p>';
+    }
 }
 
 async function renderSearch() {
@@ -57,11 +76,19 @@ async function renderSearch() {
         timeout = setTimeout(async () => {
             const query = e.target.value;
             if (!query) return;
-            const data = await api.search(query);
+            
             const grid = document.getElementById('search-results');
+            renderLoader(grid);
+            
+            const data = await api.search(query);
             grid.innerHTML = '';
-            data.results?.forEach(item => grid.appendChild(createCard(item)));
-        }, 500); // Debounce
+            
+            if(data.results) {
+                data.results.forEach(item => grid.appendChild(createCard(item)));
+            } else {
+                grid.innerHTML = '<p>No results found</p>';
+            }
+        }, 500); 
     });
 }
 
@@ -69,7 +96,7 @@ async function renderInfo(id) {
     renderLoader(container);
     const info = await api.getInfo(id);
     
-    if (!info.id) {
+    if (!info || !info.id) {
         container.innerHTML = '<div class="p-1 text-center">Content not found</div>';
         return;
     }
@@ -77,23 +104,22 @@ async function renderInfo(id) {
     addToHistory({ id: info.id, title: info.title, poster: info.poster });
 
     container.innerHTML = `
-        <div class="info-header" style="background: url(${info.poster}) center/cover; height: 300px; position: relative;">
-            <div style="position:absolute; bottom:0; background: linear-gradient(to top, #141414, transparent); width:100%; padding: 20px;">
+        <div class="info-header" style="background: linear-gradient(to top, #141414 10%, transparent), url(${info.poster}) center/cover; height: 350px; position: relative;">
+            <div style="position:absolute; bottom:0; width:100%; padding: 20px;">
                 <h1>${info.title}</h1>
-                <p>${info.year} • ${info.rating}</p>
+                <p>${info.year || ''} • ${info.rating || ''}</p>
             </div>
         </div>
         <div class="p-1">
-            <p>${info.description}</p>
+            <p>${info.description || 'No description available.'}</p>
             <div class="flex gap-1 m-1">
                 <button id="playBtn" class="btn">▶ Play</button>
                 <button id="downloadBtn" class="btn btn-secondary">⬇ Download</button>
             </div>
             
-            ${info.type === 'TV Series' ? `
+            ${info.type === 'TV Series' || info.type === 'series' ? `
                 <h3>Episodes</h3>
-                <div id="episodes-list" class="flex flex-col gap-1">
-                     <!-- Logic to list seasons/episodes would go here -->
+                <div class="flex flex-col gap-1">
                      <button class="btn-secondary w-full text-center" onclick="location.hash='#player/${id}/1/1'">Season 1 Ep 1</button>
                 </div>
             ` : ''}
@@ -101,8 +127,8 @@ async function renderInfo(id) {
     `;
 
     document.getElementById('playBtn').onclick = () => {
-        if(info.type === 'movie') window.location.hash = `#player/${id}`;
-        // Series logic handles clicking episodes
+        // Default to movie player unless it's explicitly a series
+        if(info.type === 'movie' || !info.type) window.location.hash = `#player/${id}`;
     };
 
     document.getElementById('downloadBtn').onclick = async () => {
@@ -117,17 +143,17 @@ async function renderInfo(id) {
 }
 
 async function renderPlayerPage(id, season, episode) {
-    container.innerHTML = `<div id="player-mount"></div>`;
+    container.innerHTML = `<div id="player-mount" style="width:100%; height:100vh; background:black;"></div>`;
+    showToast('Loading Stream...', 'info');
+    
     const sources = await api.getSources(id, season, episode);
     
     if (!sources.sources || !sources.sources.length) {
-        container.innerHTML = '<div class="p-1">No Video Sources Found</div>';
+        container.innerHTML = '<div class="p-1 center" style="height:100vh">No Video Sources Found</div>';
         return;
     }
 
-    // Prefer HLS, fallback to MP4
     const hlsSource = sources.sources.find(s => s.url.includes('.m3u8')) || sources.sources[0];
-    
     initPlayer(document.getElementById('player-mount'), hlsSource.url, '');
 }
 
@@ -151,9 +177,13 @@ async function renderDownloads() {
     window.playOffline = async (id) => {
         const items = await db.getAll();
         const item = items.find(i => i.id === id);
-        const url = URL.createObjectURL(item.blob);
-        container.innerHTML = `<div id="player-mount"></div>`;
-        initPlayer(document.getElementById('player-mount'), url, item.poster);
+        if(item && item.blob) {
+            const url = URL.createObjectURL(item.blob);
+            container.innerHTML = `<div id="player-mount" style="height:100vh"></div>`;
+            initPlayer(document.getElementById('player-mount'), url, item.poster);
+        } else {
+            showToast('File corrupted', 'error');
+        }
     };
 }
 
@@ -178,7 +208,7 @@ async function renderSettings() {
     container.innerHTML = `
         <div class="p-1">
             <h2>Settings</h2>
-            <button class="btn btn-secondary" onclick="localStorage.clear(); location.reload()">Reset App</button>
+            <button class="btn btn-secondary" onclick="localStorage.clear(); location.reload()">Reset App Data</button>
         </div>
     `;
 }
