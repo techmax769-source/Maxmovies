@@ -1,0 +1,12 @@
+{
+  "name": "maxmovies",
+  "version": "1.0.0",
+  "description": "MaxMovies Streaming App",
+  "main": "index.html",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
