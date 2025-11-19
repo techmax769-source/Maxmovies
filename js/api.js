@@ -4,34 +4,34 @@ import { showToast } from './ui.js';
 const BASE_URL = 'https://movieapi.giftedtech.co.ke/api';
 
 export const api = {
+    
     async fetch(endpoint) {
-        // 1. If Mock Mode is ON, skip the network entirely
         if (state.mockMode) return this.mockFetch(endpoint);
 
         try {
-            // 2. Add a 5-second timeout. 
-            // If the API doesn't answer in 5s, we cancel it and show mock data.
-            // This fixes the "Blank Screen" issue on slow connections.
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const timeoutId = setTimeout(() => controller.abort(), 7000);
 
             const response = await fetch(`${BASE_URL}${endpoint}`, {
                 signal: controller.signal
             });
-            
-            clearTimeout(timeoutId); // Clear timeout if successful
+
+            clearTimeout(timeoutId);
 
             if (!response.ok) throw new Error(`API Error: ${response.status}`);
-            return await response.json();
+
+            const data = await response.json();
+            return data;
 
         } catch (error) {
-            console.warn('Network error or Timeout. Switching to Mock data.', error);
-            showToast('Network issue. Switched to Offline Mode.', 'error');
-            return this.mockFetch(endpoint); // Automatic Fallback
+            console.warn("Network error, using mock data...");
+            showToast("Network issue. Using offline data.", "error");
+            return this.mockFetch(endpoint);
         }
     },
 
-    async search(query, page = 1, type = 'movie') {
+    // --- CORRECT DATA CALLS FOR GIFTEDTECH API ---
+    async search(query, page = 1, type = "movie") {
         return this.fetch(`/search/${query}?page=${page}&type=${type}`);
     },
 
@@ -40,21 +40,14 @@ export const api = {
     },
 
     async getSources(id, season = null, episode = null) {
-        let url = `/sources/${id}`;
-        if (season && episode) {
-            url += `?season=${season}&episode=${episode}`;
-        }
-        return this.fetch(url);
+        return this.fetch(`/sources/${id}`);
     },
 
-    // FIXED MOCK DATA HANDLER
+    // --- MOCK DATA (unchanged except paths) ---
     async mockFetch(endpoint) {
-        // Simulate a short loading delay so you see the skeleton loader
-        await new Promise(r => setTimeout(r, 500)); 
-        
+        await new Promise(r => setTimeout(r, 400));
+
         try {
-            // We check the requested endpoint and return the local JSON file
-            // Note: Paths are relative to index.html
             if (endpoint.includes('/search')) {
                 const res = await fetch('./mock/search.json');
                 return await res.json();
@@ -68,10 +61,10 @@ export const api = {
                 return await res.json();
             }
         } catch (e) {
-            console.error("Mock data load failed. Check /mock/ folder.", e);
-            return {};
+            console.error("Mock load failed:", e);
+            return { results: { items: [] } };
         }
-        
-        return {};
+
+        return { results: { items: [] } };
     }
 };
