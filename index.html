@@ -1,6 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+        <script>
+        window.onerror = function(msg, url, line, col, error) {
+            const div = document.createElement("div");
+            div.style.cssText = "position:fixed; top:10%; left:0; width:100%; background:red; color:white; padding:20px; z-index:99999; font-size:14px; word-wrap:break-word; border: 2px solid white;";
+            div.innerHTML = "<h3>⚠️ App Error</h3><p><b>" + msg + "</b></p><p>File: " + url.split('/').pop() + " : Line " + line + "</p>";
+            document.body.appendChild(div);
+        };
+        window.addEventListener('unhandledrejection', function(event) {
+            const div = document.createElement("div");
+            div.style.cssText = "position:fixed; top:30%; left:0; width:100%; background:orange; color:black; padding:20px; z-index:99999; font-size:14px; border: 2px solid black;";
+            div.innerHTML = "<h3>⚠️ Promise Error</h3><p>" + event.reason + "</p>";
+            document.body.appendChild(div);
+        });
+    </script>
+    <!-- END DEBUGGER CODE -->
+
+    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MaxMovies - Stream & Download</title>
@@ -15,6 +32,7 @@
 
     <!-- External Lib (Allowed) -->
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
 </head>
 <body>
 
