@@ -9,7 +9,7 @@ export const api = {
 
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
             const response = await fetch(`${BASE_URL}${endpoint}`, {
                 signal: controller.signal
@@ -18,27 +18,37 @@ export const api = {
             clearTimeout(timeoutId);
 
             if (!response.ok) throw new Error(`API Error: ${response.status}`);
-            const data = await response.json();
-            return data;
+            return await response.json();
 
         } catch (error) {
             console.warn('API Error, switching to fallback:', error);
-            showToast('Connection unstable. Check internet.', 'error');
+            showToast('Connection unstable. Using Offline Data.', 'error');
             return this.mockFetch(endpoint);
         }
     },
 
     async search(query, page = 1, type = 'movie') {
-        // 1. Fetch raw data
+        // Fetch raw data
         const data = await this.fetch(`/search/${query}?page=${page}&type=${type}`);
         
-        // 2. ADAPTER: Fix GiftedTech JSON Structure
-        // The API puts movies inside data.results.items, but our app expects data.results to be the array.
-        if (data && data.results && data.results.items) {
-            return { results: data.results.items };
+        // --- CRITICAL FIX BASED ON YOUR LOG ---
+        // The log showed: { results: { items: [ ... ] } }
+        if (data && data.results && Array.isArray(data.results.items)) {
+            // We map the data to a standard format our app understands
+            return { 
+                results: data.results.items.map(item => ({
+                    id: item.id || item.url, // Fallback if ID is missing
+                    title: item.title,
+                    year: item.year || item.release_date,
+                    type: type,
+                    // Try ALL common names for posters
+                    poster: item.poster || item.poster_path || item.image || item.img || item.thumbnail,
+                    rating: item.rating || 'N/A'
+                }))
+            };
         }
         
-        return data; // Return as is if structure is different
+        return data;
     },
 
     async getInfo(id) {
@@ -59,8 +69,6 @@ export const api = {
             if (endpoint.includes('/search')) return await (await fetch('./mock/search.json')).json();
             if (endpoint.includes('/info')) return await (await fetch('./mock/info.json')).json();
             if (endpoint.includes('/sources')) return await (await fetch('./mock/sources.json')).json();
-        } catch (e) {
-            return {};
-        }
+        } catch (e) { return {}; }
     }
 };
