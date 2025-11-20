@@ -4,6 +4,9 @@ import { showToast } from './ui.js';
 const BASE_URL = 'https://movieapi.giftedtech.co.ke/api';
 
 export const api = {
+    /*********************
+     *  BASE FETCH
+     *********************/
     async fetch(endpoint) {
         if (state.mockMode) return this.mockFetch(endpoint);
 
@@ -21,7 +24,7 @@ export const api = {
 
             const data = await response.json();
 
-            // Normalize into a *consistent, predictable* shape
+            // Convert GiftedTech API into predictable structure
             return this.normalizeResponse(endpoint, data);
 
         } catch (error) {
@@ -32,19 +35,33 @@ export const api = {
     },
 
     /*********************
-     *  NORMALIZER (LIVE)
+     *  NORMALIZER
      *********************/
     normalizeResponse(endpoint, data) {
         try {
+            // ------------------------
+            // ⭐ REAL API STRUCTURE ⭐
+            // ------------------------
+            //
+            // Search:
+            // data.results.items = [...]
+            //
+            // Info:
+            // data.results.subject = {...}
+            //
+            // Sources:
+            // data.results = [...]
+            //
+
             // --- SEARCH ---
             if (endpoint.includes('/search')) {
-                const list =
+                const items =
+                    data?.results?.items ??
                     data?.results ??
-                    data?.data ??
                     [];
 
                 return {
-                    results: Array.isArray(list) ? list : []
+                    results: Array.isArray(items) ? items : []
                 };
             }
 
@@ -53,7 +70,6 @@ export const api = {
                 const subject =
                     data?.results?.subject ??
                     data?.subject ??
-                    data ??
                     {};
 
                 return {
@@ -89,9 +105,8 @@ export const api = {
 
     async getInfo(id) {
         return this.fetch(`/info/${id}`);
-    }
+    },
 
-    ,
     async getSources(id, season = null, episode = null) {
         let url = `/sources/${id}`;
         if (season && episode) url += `?season=${season}&episode=${episode}`;
@@ -99,7 +114,7 @@ export const api = {
     },
 
     /*********************
-     *  MOCK FAILSAFE
+     *  MOCK FALLBACK
      *********************/
     async mockFetch(endpoint) {
         await new Promise(r => setTimeout(r, 300));
@@ -110,12 +125,15 @@ export const api = {
                 const res = await fetch('./mock/search.json');
                 const j = await res.json();
 
-                const list =
+                const items =
+                    j?.results?.items ??
                     j?.results ??
                     j?.data ??
                     (Array.isArray(j) ? j : []);
 
-                return { results: Array.isArray(list) ? list : [] };
+                return {
+                    results: Array.isArray(items) ? items : []
+                };
             }
 
             // --- INFO ---
