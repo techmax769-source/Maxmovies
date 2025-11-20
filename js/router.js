@@ -42,12 +42,12 @@ async function renderHome() {
     renderLoader(document.getElementById(gridId));
 
     try {
-        // FIX: We search 'action' because we confirmed this works in your logs
+        // We search 'action' because we know this works with your API
         const data = await api.search('action', 1, 'movie'); 
         const grid = document.getElementById(gridId);
         grid.innerHTML = ''; 
 
-        // FIX: Strict check to ensure we have a list
+        // STRICT CHECK: Ensure we have a list
         if (!data || !data.results || !Array.isArray(data.results) || data.results.length === 0) {
             console.warn("Home: No data found", data);
             grid.innerHTML = `
@@ -116,21 +116,33 @@ async function renderSearch() {
 async function renderInfo(id) {
     renderLoader(container);
     try {
-        const info = await api.getInfo(id);
+        const rawInfo = await api.getInfo(id);
         
-        // Robust check: ensure info exists
-        // Note: The API might behave differently for /info vs /search.
-        // If mapping fails, we try to show what we have.
+        // Some APIs wrap info in 'data' or 'result'
+        const info = rawInfo.result || rawInfo.data || rawInfo;
+
         if (!info) {
             container.innerHTML = '<div class="p-1 text-center">Content details not found.</div>';
             return;
         }
 
-        // Map fields if they come in raw from the API (Covering both cases)
+        // --- DATA ADAPTER FOR INFO PAGE ---
+        // Maps API fields to UI fields safely
         const title = info.title || info.name || 'Unknown Title';
-        const poster = info.poster || (info.cover ? info.cover.url : null) || 'assets/placeholder.jpg';
-        const year = info.year || (info.releaseDate ? info.releaseDate.split('-')[0] : 'N/A');
-        const desc = info.description || 'No description available.';
+        const desc = info.description || info.plot || 'No description available.';
+        
+        // Image Logic: Check cover.url (API), thumbnail, then poster
+        let poster = 'assets/placeholder.jpg';
+        if (info.cover && info.cover.url) poster = info.cover.url;
+        else if (info.thumbnail) poster = info.thumbnail;
+        else if (info.poster) poster = info.poster;
+
+        // Year Logic: "2025-11-05" -> "2025"
+        let year = info.year || 'N/A';
+        if (info.releaseDate) year = info.releaseDate.split('-')[0];
+
+        // Rating Logic
+        const rating = info.imdbRatingValue || info.rating || 'N/A';
 
         // Save to History
         addToHistory({ id: id, title: title, poster: poster });
@@ -139,7 +151,7 @@ async function renderInfo(id) {
             <div class="info-header" style="background: linear-gradient(to top, #141414 10%, transparent), url(${poster}) center/cover; height: 350px; position: relative;">
                 <div style="position:absolute; bottom:0; width:100%; padding: 20px;">
                     <h1>${title}</h1>
-                    <p>${year}</p>
+                    <p>${year} • ⭐ ${rating}</p>
                 </div>
             </div>
             <div class="p-1">
@@ -150,7 +162,7 @@ async function renderInfo(id) {
                 </div>
                 
                 ${(info.subjectType === 1 || info.type === 'series') ? `
-                    <h3>Episodes</h3>
+                    <br><h3>Episodes</h3>
                     <div class="flex flex-col gap-1">
                         <button class="btn-secondary w-full text-center" onclick="location.hash='#player/${id}/1/1'">Season 1 Ep 1</button>
                     </div>
@@ -159,7 +171,8 @@ async function renderInfo(id) {
         `;
 
         document.getElementById('playBtn').onclick = () => {
-            // Default behavior: go to player
+            // Handle Series vs Movie navigation
+            // API uses subjectType: 1 = Series, 2 = Movie (usually)
             if(info.subjectType === 1 || info.type === 'series') {
                  window.location.hash = `#player/${id}/1/1`;
             } else {
@@ -171,11 +184,11 @@ async function renderInfo(id) {
             showToast('Fetching source...', 'info');
             try {
                 const source = await api.getSources(id);
-                // Check for various API source formats
+                // Check 'sources' OR 'results'
                 const validSources = source.sources || source.results || [];
                 
                 if(validSources.length > 0) {
-                    // Use first available source
+                    // Check 'url' OR 'download_url'
                     const downloadUrl = validSources[0].url || validSources[0].download_url;
                     if(downloadUrl) {
                         startDownload({id: id, title: title, poster: poster}, downloadUrl);
@@ -212,6 +225,7 @@ async function renderPlayerPage(id, season, episode) {
         }
 
         // Priority: M3U8 (HLS) -> MP4
+        // Check both 'url' and 'download_url' keys
         const hlsSource = validSources.find(s => (s.url || s.download_url).includes('.m3u8')) || validSources[0];
         const finalUrl = hlsSource.url || hlsSource.download_url;
 
@@ -285,7 +299,7 @@ async function renderSettings() {
             <h2>Settings</h2>
             <button class="btn btn-secondary" onclick="localStorage.clear(); location.reload()">Reset App Data</button>
             <br><br>
-            <p>Version: 1.3.0 (API Adapted)</p>
+            <p>Version: 1.4.0 (API Compatible)</p>
         </div>
     `;
 }
