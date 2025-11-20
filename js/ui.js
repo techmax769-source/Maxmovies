@@ -1,58 +1,69 @@
+/* ============================================================
+   TOAST SYSTEM — Improved Animation + Safer DOM
+============================================================ */
 export const showToast = (message, type = 'info') => {
     const container = document.getElementById('toast-container');
     if (!container) return;
-    
+
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
+
     toast.style.cssText = `
-        background: ${type === 'error' ? '#d32f2f' : '#333'};
-        color: white; 
-        padding: 12px 20px; 
-        margin: 10px; 
-        border-radius: 50px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.4); 
-        animation: fade 0.3s; 
-        z-index: 9999;
+        background: ${type === 'error' ? '#d32f2f' : '#222'};
+        color: #fff;
+        padding: 12px 20px;
+        margin: 10px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.35);
         font-size: 14px;
-        text-align: center;
+        animation: toastFadeIn 0.25s ease-out;
+        opacity: 1;
+        transition: opacity 0.35s ease;
+        z-index: 9999;
     `;
-    
+
     toast.innerText = message;
     container.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+
+    // Auto-hide
+    setTimeout(() => {
+        toast.style.opacity = "0";
+        setTimeout(() => toast.remove(), 350);
+    }, 2500);
 };
 
 
 /* ============================================================
-   CARD COMPONENT — CLEANED + FIXED FOR GIFTEDTECH API
+   CARD COMPONENT — Final GiftedMovie Version
 ============================================================ */
 export const createCard = (item) => {
     const div = document.createElement('div');
     div.className = 'card';
 
-    // GiftedTech always returns a full image URL in item.poster
+    // GiftedMovie uses "poster" for image
     let imgUrl = item.poster;
 
-    // If missing image → fallback placeholder
-    if (!imgUrl || imgUrl === 'N/A' || imgUrl.trim() === '') {
-        imgUrl = 'https://via.placeholder.com/300x450?text=No+Image';
+    // Fallback image
+    if (!imgUrl || imgUrl === "N/A" || imgUrl.trim() === "") {
+        imgUrl = "https://via.placeholder.com/300x450?text=No+Image";
     }
 
     div.innerHTML = `
-        <div style="position: relative; width: 100%; padding-top: 150%; background: #222;">
-            <img src="${imgUrl}"
-                 alt="${item.title}"
+        <div class="card-img-wrapper">
+            <img class="card-img"
+                 src="${imgUrl}"
                  loading="lazy"
-                 style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;"
-                 onerror="this.onerror=null; this.src='https://via.placeholder.com/300x450?text=Image+Error'">
+                 alt="${item.title || 'Untitled'}"
+                 onerror="this.onerror=null; this.src='https://via.placeholder.com/300x450?text=Image+Error';">
         </div>
+
         <div class="card-info">
-            <div class="card-title">${item.title || 'Untitled'}</div>
-            <div class="card-year">${item.year || ''}</div>
+            <div class="card-title">${item.title || "Untitled"}</div>
+            <div class="card-year">${item.year || ""}</div>
         </div>
     `;
 
-    // Clicking -> navigate to info page
+    // Navigate to info page
     if (item.id) {
         div.onclick = () => {
             window.location.hash = `#info/${item.id}`;
@@ -64,13 +75,14 @@ export const createCard = (item) => {
 
 
 /* ============================================================
-   LOADER SPINNER
+   LOADER — Centered Spinner
 ============================================================ */
 export const renderLoader = (container) => {
     if (!container) return;
+
     container.innerHTML = `
-        <div class="flex center w-full" style="height:200px; justify-content:center; align-items:center;">
-            <div class="skeleton" style="width:50px; height:50px; border-radius:50%;"></div>
+        <div class="loader-container">
+            <div class="loader-circle"></div>
         </div>
     `;
 };
