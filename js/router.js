@@ -7,314 +7,266 @@ import { state, addToHistory } from './state.js';
 
 const container = document.getElementById('app-container');
 
-/* ----------------------------------------
-    MAIN ROUTER
----------------------------------------- */
 export const router = async () => {
+    // 1. Cleanup video player when switching pages
     try {
-        destroyPlayer();
-    } catch {}
+        destroyPlayer(); 
+    } catch (e) { 
+        console.log('Player cleanup ignored'); 
+    }
 
-    const hash = window.location.hash.slice(1) || "home";
-    const params = hash.split("/");
+    // 2. Handle Routing
+    const hash = window.location.hash.slice(1) || 'home';
+    const params = hash.split('/');
     const route = params[0];
 
-    window.scrollTo(0, 0);
+    window.scrollTo(0,0);
 
-    switch (route) {
-        case "home": return renderHome();
-        case "search": return renderSearch();
-        case "info": return renderInfo(params[1]);
-        case "player": return renderPlayerPage(params[1], params[2], params[3]);
-        case "downloads": return renderDownloads();
-        case "library": return renderLibrary();
-        case "settings": return renderSettings();
-        default:
-            container.innerHTML = `<div class="p-1">Page not found.</div>`;
-    }
+    if (route === 'home') return renderHome();
+    if (route === 'search') return renderSearch();
+    if (route === 'info') return renderInfo(params[1]);
+    if (route === 'player') return renderPlayerPage(params[1], params[2], params[3]);
+    if (route === 'downloads') return renderDownloads();
+    if (route === 'library') return renderLibrary();
+    if (route === 'settings') return renderSettings();
 };
 
-/* ----------------------------------------
-    HOME PAGE
----------------------------------------- */
+// --- Page Renderers ---
+
 async function renderHome() {
-    const gridId = "trending-grid";
+    const gridId = 'trending-grid';
     container.innerHTML = `
-        <div class="hero p-1"><h1>Trending Now</h1></div>
+        <div class="hero p-1"><h1>New Releases</h1></div>
         <div id="${gridId}" class="media-grid"></div>
     `;
-
-    const grid = document.getElementById(gridId);
-    renderLoader(grid);
+    renderLoader(document.getElementById(gridId));
 
     try {
-        const data = await api.search("action", 1, "movie");
-        const list = Array.isArray(data?.results) ? data.results : [];
+        // Search for "2024" to get recent movies
+        // (The API adapter we wrote in api.js handles the nested structure)
+        const data = await api.search('2024', 1, 'movie'); 
+        const grid = document.getElementById(gridId);
+        grid.innerHTML = ''; 
 
-        grid.innerHTML = "";
-
-        if (!list.length) {
+        // STRICT CHECK: Ensure we have a list
+        if (!data || !data.results || !Array.isArray(data.results) || data.results.length === 0) {
+            console.warn("Home: No data found", data);
             grid.innerHTML = `
-                <div class="p-1 text-center" style="grid-column:1/-1;">
-                    <p>No content found.</p>
+                <div class="p-1 text-center" style="grid-column: 1/-1;">
+                    <p>No trending content found.</p>
+                    <small style="color:gray">Try searching manually.</small>
+                    <br><br>
                     <button class="btn" onclick="window.location.reload()">Retry</button>
                 </div>
             `;
             return;
         }
 
-        list.forEach(item => {
-            if (item?.id) grid.appendChild(createCard(item));
-        });
+        // Render cards
+        data.results.forEach(item => grid.appendChild(createCard(item)));
 
     } catch (err) {
-        grid.innerHTML = `
-            <div class="p-1" style="color:red;">
-                Error loading content.<br>${err.message}
+        console.error("Render Error:", err);
+        document.getElementById(gridId).innerHTML = `
+            <div class="p-1" style="color: red;">
+                <h3>Error Loading Home</h3>
+                <p>${err.message}</p>
             </div>
         `;
     }
 }
 
-/* ----------------------------------------
-    SEARCH PAGE
----------------------------------------- */
 async function renderSearch() {
     container.innerHTML = `
         <div class="p-1">
-            <input id="searchInput" class="search-bar" placeholder="Search movies...">
+            <input type="text" id="searchInput" class="search-bar" placeholder="Search movies & series...">
             <div id="search-results" class="media-grid"></div>
         </div>
     `;
+    
+    const input = document.getElementById('searchInput');
+    let timeout;
+    
+    input.addEventListener('input', (e) => {
+        clearTimeout(timeout);
+        const query = e.target.value.trim();
+        
+        if (!query) return;
 
-    const input = document.getElementById("searchInput");
-    const grid = document.getElementById("search-results");
-
-    let debounce;
-
-    input.addEventListener("input", e => {
-        clearTimeout(debounce);
-        debounce = setTimeout(async () => {
-            const query = e.target.value.trim();
-            if (!query) {
-                grid.innerHTML = "";
-                return;
-            }
-
+        timeout = setTimeout(async () => {
+            const grid = document.getElementById('search-results');
             renderLoader(grid);
-
+            
             try {
                 const data = await api.search(query);
-                const list = Array.isArray(data?.results) ? data.results : [];
-
-                grid.innerHTML = "";
-
-                if (!list.length) {
-                    grid.innerHTML = `<p class="p-1">No results found</p>`;
-                    return;
+                grid.innerHTML = '';
+                
+                if(data && data.results && Array.isArray(data.results) && data.results.length > 0) {
+                    data.results.forEach(item => grid.appendChild(createCard(item)));
+                } else {
+                    grid.innerHTML = '<p class="p-1">No results found</p>';
                 }
-
-                list.forEach(item => {
-                    if (item?.id) grid.appendChild(createCard(item));
-                });
-
-            } catch {
-                grid.innerHTML = `<p class="p-1" style="color:red;">Search failed</p>`;
+            } catch (err) {
+                grid.innerHTML = `<p class="p-1" style="color:red">Search Error: ${err.message}</p>`;
             }
-        }, 350);
+        }, 800); // Debounce 800ms
     });
 }
 
-/* ----------------------------------------
-    INFO PAGE
----------------------------------------- */
 async function renderInfo(id) {
-    if (!id) {
-        container.innerHTML = `<div class="p-1">Invalid ID.</div>`;
-        return;
-    }
-
     renderLoader(container);
-
     try {
-        const data = await api.getInfo(id);
-
-        const info = data?.results?.subject || null;
-        if (!info) {
-            container.innerHTML = `<div class="p-1">Content not found.</div>`;
+        const info = await api.getInfo(id);
+        
+        if (!info || !info.id) {
+            container.innerHTML = '<div class="p-1 text-center">Content details not found.</div>';
             return;
         }
 
-        addToHistory({
-            id: info.id,
-            title: info.title,
-            poster: info.poster
-        });
+        // Save to History
+        addToHistory({ id: info.id, title: info.title, poster: info.poster });
 
+        // Handle background image safely
+        const bgImage = (info.poster && info.poster !== 'N/A') ? info.poster : 'https://via.placeholder.com/300x450';
+        
         container.innerHTML = `
-            <div class="info-header"
-                style="background:linear-gradient(to top,#141414 10%,transparent),
-                url(${info.poster}) center/cover; height:350px;">
-                <div style="position:absolute; bottom:0; padding:20px;">
-                    <h1>${info.title}</h1>
+            <div class="info-header" style="background: linear-gradient(to top, #141414 10%, transparent), url(${bgImage}) center/cover; height: 350px; position: relative;">
+                <div style="position:absolute; bottom:0; width:100%; padding: 20px;">
+                    <h1>${info.title || 'Unknown Title'}</h1>
                     <p>${info.year || ''} • ${info.rating || ''}</p>
                 </div>
             </div>
-
             <div class="p-1">
-                <p>${info.description || "No description available."}</p>
-
+                <p>${info.description || 'No description available.'}</p>
                 <div class="flex gap-1 m-1">
                     <button id="playBtn" class="btn">▶ Play</button>
                     <button id="downloadBtn" class="btn btn-secondary">⬇ Download</button>
                 </div>
+                
+                ${(info.type === 'TV Series' || info.type === 'series') ? `
+                    <h3>Episodes</h3>
+                    <div class="flex flex-col gap-1">
+                        <button class="btn-secondary w-full text-center" onclick="location.hash='#player/${id}/1/1'">Season 1 Ep 1</button>
+                        <!-- Add more episodes logic here if API supports it -->
+                    </div>
+                ` : ''}
             </div>
         `;
 
-        document.getElementById("playBtn").onclick = () => {
-            window.location.hash = `#player/${id}`;
+        document.getElementById('playBtn').onclick = () => {
+            // If it's a series, default to S1 E1, else just Movie ID
+            if(info.type === 'TV Series' || info.type === 'series') {
+                window.location.hash = `#player/${id}/1/1`;
+            } else {
+                window.location.hash = `#player/${id}`;
+            }
         };
 
-        document.getElementById("downloadBtn").onclick = async () => {
-            showToast("Fetching download...", "info");
-
-            const sources = await api.getSources(id);
-            const list = Array.isArray(sources?.results) ? sources.results : [];
-
-            if (!list.length) {
-                showToast("No download sources found", "error");
-                return;
+        document.getElementById('downloadBtn').onclick = async () => {
+            showToast('Fetching source...', 'info');
+            try {
+                const source = await api.getSources(id);
+                if(source && source.sources && source.sources.length > 0) {
+                    startDownload({id: info.id, title: info.title, poster: info.poster}, source.sources[0].url);
+                } else {
+                    showToast('No download source found', 'error');
+                }
+            } catch (e) {
+                showToast('Error fetching download source', 'error');
             }
-
-            const best = list[0];
-            const url = best?.download_url || best?.url;
-
-            if (!url) {
-                showToast("Invalid source", "error");
-                return;
-            }
-
-            startDownload(info, url);
         };
-
     } catch (e) {
-        container.innerHTML = `<div class="p-1">Error: ${e.message}</div>`;
+        container.innerHTML = `<div class="p-1">Error loading info: ${e.message}</div>`;
     }
 }
 
-/* ----------------------------------------
-    PLAYER PAGE
----------------------------------------- */
 async function renderPlayerPage(id, season, episode) {
-    container.innerHTML = `<div id="player-mount" style="height:100vh; background:black;"></div>`;
-    showToast("Loading stream...", "info");
-
+    container.innerHTML = `<div id="player-mount" style="width:100%; height:100vh; background:black;"></div>`;
+    showToast('Loading Stream...', 'info');
+    
     try {
-        const srcData = await api.getSources(id, season, episode);
-        const list = Array.isArray(srcData?.results) ? srcData.results : [];
-
-        if (!list.length) {
-            container.innerHTML = `<div class="p-1 center">No Video Sources Found</div>`;
+        const sources = await api.getSources(id, season, episode);
+        
+        if (!sources || !sources.sources || !sources.sources.length) {
+            container.innerHTML = `
+                <div class="p-1 center flex-col" style="height:100vh">
+                    <p>No Video Sources Found</p>
+                    <button class="btn" onclick="history.back()">Go Back</button>
+                </div>`;
             return;
         }
 
-        const source =
-            list.find(s => s.url?.includes(".m3u8")) ||
-            list[0];
-
-        if (!source?.url) {
-            container.innerHTML = `<div class="p-1 center">Invalid streaming source.</div>`;
-            return;
-        }
-
-        initPlayer(
-            document.getElementById("player-mount"),
-            source.url,
-            ""
-        );
+        // Priority: M3U8 (HLS) -> MP4 -> First Available
+        const hlsSource = sources.sources.find(s => s.url.includes('.m3u8')) || sources.sources[0];
+        initPlayer(document.getElementById('player-mount'), hlsSource.url, '');
 
     } catch (e) {
-        container.innerHTML = `<div class="p-1 center" style="color:red">Stream Error: ${e.message}</div>`;
+        container.innerHTML = `<div class="p-1 center" style="height:100vh; color:red">Stream Error: ${e.message}</div>`;
     }
 }
 
-/* ----------------------------------------
-    DOWNLOADS PAGE
----------------------------------------- */
 async function renderDownloads() {
     try {
-        const items = (await db.getAll()) || [];
+        const items = await db.getAll();
+        const safeItems = items || [];
 
         container.innerHTML = `
             <div class="p-1">
                 <h2>Downloads</h2>
-                ${items.length === 0 ? "<p>No downloads yet.</p>" : ""}
+                ${safeItems.length === 0 ? '<p>No downloaded movies yet.</p>' : ''}
                 <div class="media-grid">
-                    ${items.map(item => `
+                    ${safeItems.map(item => `
                         <div class="card" onclick="playOffline('${item.id}')">
-                            <img src="${item.poster}">
-                            <div class="card-info">
-                                <div class="card-title">${item.title}</div>
-                            </div>
+                            <img src="${item.poster || 'assets/placeholder.jpg'}" style="opacity:0.7">
+                            <div class="card-info"><div class="card-title">${item.title}</div></div>
                         </div>
-                    `).join("")}
+                    `).join('')}
                 </div>
             </div>
         `;
-
-        window.playOffline = async id => {
-            const all = await db.getAll();
-            const item = all.find(i => i.id === id);
-
-            if (!item?.blob) {
-                showToast("File missing or corrupted", "error");
-                return;
+        
+        window.playOffline = async (id) => {
+            const allItems = await db.getAll();
+            const item = allItems.find(i => i.id === id);
+            if(item && item.blob) {
+                const url = URL.createObjectURL(item.blob);
+                container.innerHTML = `<div id="player-mount" style="height:100vh"></div>`;
+                initPlayer(document.getElementById('player-mount'), url, item.poster);
+            } else {
+                showToast('File corrupted or missing', 'error');
             }
-
-            const url = URL.createObjectURL(item.blob);
-            container.innerHTML = `<div id="player-mount" style="height:100vh;"></div>`;
-            initPlayer(document.getElementById("player-mount"), url, item.poster);
         };
-
     } catch (e) {
         container.innerHTML = `<div class="p-1">Error loading downloads: ${e.message}</div>`;
     }
 }
 
-/* ----------------------------------------
-    LIBRARY PAGE
----------------------------------------- */
 async function renderLibrary() {
     const history = state.history || [];
 
     container.innerHTML = `
         <div class="p-1">
             <h2>Recently Watched</h2>
-            ${history.length === 0 ? "<p>No history yet.</p>" : ""}
+            ${history.length === 0 ? '<p>No history yet.</p>' : ''}
             <div class="media-grid">
-                ${history.map(item => `
+                 ${history.map(item => `
                     <div class="card" onclick="location.hash='#info/${item.id}'">
-                        <img src="${item.poster}">
+                        <img src="${item.poster || ''}">
                         <div class="card-info"><div class="card-title">${item.title}</div></div>
                     </div>
-                `).join("")}
+                `).join('')}
             </div>
         </div>
     `;
 }
 
-/* ----------------------------------------
-    SETTINGS PAGE
----------------------------------------- */
 async function renderSettings() {
     container.innerHTML = `
         <div class="p-1">
             <h2>Settings</h2>
-            <button class="btn btn-secondary" onclick="localStorage.clear(); location.reload()">
-                Reset App Data
-            </button>
+            <button class="btn btn-secondary" onclick="localStorage.clear(); location.reload()">Reset App Data</button>
             <br><br>
-            <p>Version: 1.1.0 (Stable)</p>
+            <p>Version: 1.2.0 (Stable)</p>
         </div>
     `;
 }
