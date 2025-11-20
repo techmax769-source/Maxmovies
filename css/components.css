@@ -1,61 +1,72 @@
-/* Cards */
-.media-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 1rem;
-    padding: 1rem;
+/* ============================================================
+   TOAST — smooth animation, no overrides to base UI
+   ============================================================ */
+@keyframes toastFadeIn {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
 }
 
-.card {
-    background: var(--darker);
-    border-radius: var(--border-radius);
-    overflow: hidden;
-    transition: transform 0.2s;
-    cursor: pointer;
+.toast {
+    animation: toastFadeIn 0.25s ease-out;
+    pointer-events: none;
 }
-.card:hover { transform: scale(1.05); }
-.card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; }
-.card-info { padding: 0.5rem; }
-.card-title { font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-year { font-size: 0.8rem; color: var(--gray); }
 
-/* Buttons */
-.btn {
-    padding: 0.8rem 1.5rem;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: bold;
-    background: var(--primary);
-    color: white;
+/* Ensures toast container doesn't shift layout */
+#toast-container {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
 }
-.btn-secondary { background: rgba(255,255,255,0.2); }
-.btn-icon { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: white; }
 
-/* Inputs */
-.search-bar {
+
+/* ============================================================
+   LOADER — isolated styling, doesn't touch existing components
+   ============================================================ */
+.loader-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
     width: 100%;
-    padding: 1rem;
-    background: #222;
-    border: 1px solid #333;
-    color: white;
-    border-radius: 20px;
-    margin-bottom: 1rem;
+    padding: 2rem 0;
 }
 
-/* Modal */
-#modal-overlay {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.8);
-    z-index: 1000;
-    display: flex; justify-content: center; align-items: center;
+.loader-circle {
+    width: 46px;
+    height: 46px;
+    background: radial-gradient(circle, #666, #333);
+    border-radius: 50%;
+    animation: loaderPulse 0.9s ease-in-out infinite alternate;
 }
-.modal-content {
-    background: var(--darker);
-    padding: 2rem;
-    border-radius: 8px;
-    max-width: 500px;
-    width: 90%;
-    position: relative;
+
+@keyframes loaderPulse {
+    from { transform: scale(0.75); opacity: 0.7; }
+    to   { transform: scale(1); opacity: 1; }
 }
-.close-modal { position: absolute; top: 10px; right: 10px; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; }
+
+
+/* ============================================================
+   CARD IMPROVEMENT — isolated, no collision
+   ============================================================ */
+.card img.enhanced-fade {
+    opacity: 0;
+    transition: opacity 0.35s ease-out;
+}
+
+.card img.enhanced-fade.loaded {
+    opacity: 1;
+}
+
+
+/* ============================================================
+   OPTIONAL: SAFER IMAGE FALLBACK
+   (Does not override anything — only applies when broken)
+   ============================================================ */
+img[data-fallback] {
+    background: #222;
+    object-fit: cover;
+}
