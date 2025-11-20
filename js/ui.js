@@ -16,33 +16,33 @@ export const showToast = (message, type = 'info') => {
         font-size: 14px;
         text-align: center;
     `;
+    
     toast.innerText = message;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
 };
 
+
+/* ============================================================
+   CARD COMPONENT — CLEANED + FIXED FOR GIFTEDTECH API
+============================================================ */
 export const createCard = (item) => {
     const div = document.createElement('div');
     div.className = 'card';
-    
-    // --- IMAGE FIXING LOGIC ---
+
+    // GiftedTech always returns a full image URL in item.poster
     let imgUrl = item.poster;
-    
-    // 1. If no image, use placeholder
-    if (!imgUrl || imgUrl === 'N/A' || imgUrl === '') {
+
+    // If missing image → fallback placeholder
+    if (!imgUrl || imgUrl === 'N/A' || imgUrl.trim() === '') {
         imgUrl = 'https://via.placeholder.com/300x450?text=No+Image';
-    } 
-    // 2. If image is a relative path (starts with /), assume it needs a base URL
-    // (Many APIs behave this way, specifically TMDB based ones)
-    else if (imgUrl.startsWith('/')) {
-        imgUrl = `https://image.tmdb.org/t/p/w500${imgUrl}`;
     }
 
     div.innerHTML = `
         <div style="position: relative; width: 100%; padding-top: 150%; background: #222;">
-            <img src="${imgUrl}" 
-                 alt="${item.title}" 
-                 loading="lazy" 
+            <img src="${imgUrl}"
+                 alt="${item.title}"
+                 loading="lazy"
                  style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;"
                  onerror="this.onerror=null; this.src='https://via.placeholder.com/300x450?text=Image+Error'">
         </div>
@@ -51,13 +51,21 @@ export const createCard = (item) => {
             <div class="card-year">${item.year || ''}</div>
         </div>
     `;
-    
+
+    // Clicking -> navigate to info page
     if (item.id) {
-        div.onclick = () => window.location.hash = `#info/${item.id}`;
+        div.onclick = () => {
+            window.location.hash = `#info/${item.id}`;
+        };
     }
+
     return div;
 };
 
+
+/* ============================================================
+   LOADER SPINNER
+============================================================ */
 export const renderLoader = (container) => {
     if (!container) return;
     container.innerHTML = `
