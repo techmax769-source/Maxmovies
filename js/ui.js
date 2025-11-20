@@ -1,41 +1,48 @@
 export const showToast = (message, type = 'info') => {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
+
     toast.className = `toast toast-${type}`;
     toast.style.cssText = `
         background: ${type === 'error' ? '#d32f2f' : '#333'};
-        color: white; padding: 12px; margin: 10px; border-radius: 4px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3); animation: fade 0.3s;
+        color: white; padding: 12px; margin: 10px;
+        border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        animation: fade 0.3s;
     `;
+
     toast.innerText = message;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
 };
 
+/**
+ * Create card that matches GiftedTech API fields
+ */
 export const createCard = (item) => {
-    // FIX: API uses subject_id, id, or imdb_id
-    const safeId = item.subject_id || item.id || item.imdb_id;
-
-    // FIX: poster sometimes comes as "cover" in your API
-    const thumbnail = item.poster || item.cover || 'assets/placeholder.jpg';
-
     const div = document.createElement('div');
     div.className = 'card';
+
+    const poster =
+        item.thumbnail ||
+        item.cover?.url ||
+        'assets/placeholder.jpg';
+
+    const year = item.releaseDate
+        ? item.releaseDate.substring(0, 4)
+        : 'N/A';
+
+    const type = item.subjectType === 2 ? "Series" : "Movie";
+
     div.innerHTML = `
-        <img src="${thumbnail}" alt="${item.title}" loading="lazy">
+        <img src="${poster}" alt="${item.title}" loading="lazy">
         <div class="card-info">
             <div class="card-title">${item.title}</div>
-            <div class="card-year">${item.year || 'N/A'} • ${item.type || ''}</div>
+            <div class="card-year">${year} • ${type}</div>
         </div>
     `;
 
-    div.onclick = () => {
-        if (!safeId) {
-            console.error("Item has no valid ID:", item);
-            return showToast("Invalid ID for this item", "error");
-        }
-        window.location.hash = `#info/${safeId}`;
-    };
+    // navigate via subjectId instead of item.id
+    div.onclick = () => window.location.hash = `#info/${item.subjectId}`;
 
     return div;
 };
