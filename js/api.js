@@ -5,121 +5,112 @@ const BASE_URL = "https://movieapi.giftedtech.co.ke/api";
 
 export const api = {
 
+    // -----------------------------
+    // Universal Fetch
+    // -----------------------------
     async fetch(endpoint) {
         if (state.mockMode) return this.mockFetch(endpoint);
 
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const timeout = setTimeout(() => controller.abort(), 15000);
 
             const response = await fetch(`${BASE_URL}${endpoint}`, {
                 signal: controller.signal
             });
 
-            clearTimeout(timeoutId);
+            clearTimeout(timeout);
 
             if (!response.ok) {
-                throw new Error(`API Error: ${response.status}`);
+                throw new Error("API Error " + response.status);
             }
 
             return await response.json();
-
-        } catch (error) {
-            console.warn("API Failed:", error);
-
-            if (!endpoint.includes("auto")) {
-                showToast("Connection issue. Using Offline Data.", "error");
-            }
-
+        } catch (err) {
+            console.warn("API Error:", err);
+            showToast("Network Issue — using offline data", "error");
             return this.mockFetch(endpoint);
         }
     },
 
     // -----------------------------
-    // 1. SEARCH (Corrected Endpoint)
+    // SEARCH  —  /search?query=
     // -----------------------------
     async search(query) {
-        const encodedQuery = encodeURIComponent(query);
-        const data = await this.fetch(`/search/${encodedQuery}`);
+        const q = encodeURIComponent(query);
 
-        if (data && data.results && Array.isArray(data.results.items)) {
-            return {
-                results: data.results.items.map(item => this.normalizeItem(item))
-            };
-        }
+        const data = await this.fetch(`/search?query=${q}`);
 
-        return { results: [] };
-    },
-
-    // -----------------------------
-    // 2. INFO (Corrected)
-    // -----------------------------
-    async getInfo(id) {
-        const data = await this.fetch(`/info/${id}`);
-
-        if (data && data.results && data.results.subject) {
-            return this.normalizeItem(data.results.subject);
-        }
-
-        return null;
-    },
-
-    // -----------------------------
-    // 3. SOURCES (Corrected)
-    // -----------------------------
-    async getSources(id) {
-        return this.fetch(`/sources/${id}`);
-    },
-
-    // -----------------------------
-    // Normalize GiftedTech Movie Data
-    // -----------------------------
-    normalizeItem(item) {
-        // Image fix (covers all possibilities)
-        let img = "assets/placeholder.jpg";
-
-        if (item.cover) img = item.cover;
-        if (item.cover?.url) img = item.cover.url;
-        if (item.poster) img = item.poster;
-        if (item.thumbnail) img = item.thumbnail;
-
-        const finalId = item.subjectId || item.id;
-
-        // Fix year
-        let finalYear = "N/A";
-        if (item.releaseDate) finalYear = item.releaseDate.split("-")[0];
-        if (item.year) finalYear = item.year;
-
-        const finalType =
-            item.subjectType === 1 || item.type === "series"
-                ? "series"
-                : "movie";
+        if (!data || !data.results) return { results: [] };
 
         return {
-            id: finalId,
-            title: item.title || "Untitled",
-            year: finalYear,
-            type: finalType,
-            poster: img,
-            description: item.description || item.plot || "",
-            rating: item.imdbRatingValue || item.rating || "N/A"
+            results: data.results.map(item => this.normalizeItem(item))
         };
     },
 
     // -----------------------------
-    // Offline mock data fallback
+    // INFO  —  /info?id=
+    // -----------------------------
+    async getInfo(id) {
+        const data = await this.fetch(`/info?id=${id}`);
+
+        if (!data || !data.results) return null;
+
+        return this.normalizeItem(data.results);
+    },
+
+    // -----------------------------
+    // SOURCES  —  /watch?id=
+    // -----------------------------
+    async getSources(id) {
+        const data = await this.fetch(`/watch?id=${id}`);
+
+        if (!data || !data.sources) return { sources: [] };
+
+        return data.sources;
+    },
+
+    // -----------------------------
+    //  NORMALIZATION FOR UI
+    // -----------------------------
+    normalizeItem(item) {
+
+        // --- Image Handling ---
+        let poster = "assets/placeholder.jpg";
+        if (item.poster) poster = item.poster;
+        if (item.cover) poster = item.cover;
+        if (item.image) poster = item.image;
+
+        // --- Year Fix ---
+        let year = "N/A";
+        if (item.year) year = item.year;
+        if (item.releaseDate) year = item.releaseDate.split("-")[0];
+
+        return {
+            id: item.id,
+            title: item.title || "Untitled",
+            year,
+            type: item.type || "movie",
+            poster,
+            description: item.description || item.plot || "",
+            rating: item.rating || item.imdbRating || "N/A"
+        };
+    },
+
+    // -----------------------------
+    // MOCK DATA (Offline mode)
     // -----------------------------
     async mockFetch(endpoint) {
-        await new Promise(r => setTimeout(r, 500));
+        await new Promise(r => setTimeout(r, 400));
 
         try {
-            if (endpoint.includes("/search"))
+            if (endpoint.includes("search"))
                 return await (await fetch("./mock/search.json")).json();
 
-            if (endpoint.includes("/info"))
+            if (endpoint.includes("info"))
                 return await (await fetch("./mock/info.json")).json();
 
-            if (endpoint.includes("/sources"))
+            if (endpoint.includes("watch"))
                 return await (await fetch("./mock/sources.json")).json();
 
         } catch (e) {
