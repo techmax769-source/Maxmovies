@@ -5,15 +5,12 @@ const BASE_URL = 'https://movieapi.giftedtech.co.ke/api';
 
 export const api = {
     async fetch(endpoint) {
-        // If user manually turned on Mock Mode, use it.
         if (state.mockMode) return this.mockFetch(endpoint);
 
         try {
             const controller = new AbortController();
-            // Give the API 15 seconds to respond
-            const timeoutId = setTimeout(() => controller.abort(), 15000); 
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s Timeout
 
-            console.log(`Fetching: ${BASE_URL}${endpoint}`); // Debug log
             const response = await fetch(`${BASE_URL}${endpoint}`, {
                 signal: controller.signal
             });
@@ -24,53 +21,64 @@ export const api = {
             return await response.json();
 
         } catch (error) {
-            console.error('API Failed:', error);
-            showToast('Network error. Showing Offline Data.', 'error');
-            return this.mockFetch(endpoint); // Fallback to "Cyber Dystopia" if real API fails
+            console.warn('API Failed:', error);
+            showToast('Connection unstable. Using Offline Data.', 'error');
+            return this.mockFetch(endpoint);
         }
     },
 
     async search(query, page = 1, type = 'movie') {
-        // 1. Fetch the raw data from GiftedTech
+        // 1. Get Raw Data
         const data = await this.fetch(`/search/${query}?page=${page}&type=${type}`);
         
-        // 2. CHECK & TRANSLATE (The Fix)
-        // The API puts the list inside: data.results.items
+        // 2. ADAPTER: Translate GiftedTech format to App format
+        // API Structure: { results: { items: [ ... ] } }
         if (data && data.results && Array.isArray(data.results.items)) {
-            console.log("GiftedTech Data Found, Translating...");
-            return { 
-                results: data.results.items.map(item => {
-                    // 1. Fix Image
-                    let img = 'assets/placeholder.jpg';
-                    if (item.cover && item.cover.url) img = item.cover.url;
-                    else if (item.thumbnail) img = item.thumbnail;
+            
+            const cleanResults = data.results.items.map(item => {
+                // IMAGE FIX: Check 'cover.url', then 'thumbnail', then 'poster'
+                let finalImage = 'assets/placeholder.jpg';
+                if (item.cover && item.cover.url) finalImage = item.cover.url;
+                else if (item.thumbnail) finalImage = item.thumbnail;
+                else if (item.poster) finalImage = item.poster;
 
-                    // 2. Fix Year (from "2025-11-05" to "2025")
-                    let year = item.releaseDate ? item.releaseDate.split('-')[0] : 'N/A';
+                // ID FIX: Check 'subjectId', then 'id'
+                const finalId = item.subjectId || item.id;
 
-                    // 3. Fix Type (API uses numbers: 2=Movie)
-                    let mediaType = 'movie';
-                    if (item.subjectType === 1) mediaType = 'series';
+                // YEAR FIX: Extract "2025" from "2025-11-05"
+                let finalYear = 'N/A';
+                if (item.releaseDate) finalYear = item.releaseDate.split('-')[0];
+                else if (item.year) finalYear = item.year;
 
-                    return {
-                        id: item.subjectId,   // CRITICAL: Maps subjectId -> id
-                        title: item.title,
-                        year: year,
-                        type: mediaType,
-                        poster: img,          // CRITICAL: Maps cover.url -> poster
-                        rating: item.imdbRatingValue || 'N/A'
-                    };
-                })
-            };
+                // TYPE FIX: API uses numbers (2 = movie?)
+                // We treat everything as 'movie' unless specified otherwise to be safe
+                const finalType = (item.subjectType === 1 || item.type === 'series') ? 'series' : 'movie';
+
+                return {
+                    id: finalId,
+                    title: item.title || 'Untitled',
+                    year: finalYear,
+                    type: finalType,
+                    poster: finalImage,
+                    rating: item.imdbRatingValue || item.rating || 'N/A'
+                };
+            });
+
+            return { results: cleanResults };
         }
         
-        // If data format is standard (or fallback), return as is
         return data;
     },
 
     async getInfo(id) {
-        // Pass through for now
-        return this.fetch(`/info/${id}`);
+        // The /info endpoint likely returns the same "GiftedTech" structure.
+        // We pass it through, but the UI needs to handle the fields.
+        const data = await this.fetch(`/info/${id}`);
+        
+        // If data is wrapped in 'data' or 'result', unwrap it here
+        if(data && data.result) return data.result;
+        
+        return data;
     },
 
     async getSources(id, season = null, episode = null) {
@@ -82,7 +90,6 @@ export const api = {
     },
 
     async mockFetch(endpoint) {
-        // This functions loads "Cyber Dystopia" from your local files
         await new Promise(r => setTimeout(r, 500));
         try {
             if (endpoint.includes('/search')) return await (await fetch('./mock/search.json')).json();
