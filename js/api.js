@@ -1,7 +1,7 @@
 import { state } from './state.js';
 import { showToast } from './ui.js';
 
-const BASE_URL = 'https://movieapi.giftedtech.co.ke/api';
+const BASE_URL = 'https://movieapi.giftedtech.co.ke/api/search/';
 
 export const api = {
 
