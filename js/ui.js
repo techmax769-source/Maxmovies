@@ -1,56 +1,64 @@
 export const showToast = (message, type = 'info') => {
     const container = document.getElementById('toast-container');
+    if (!container) return;
+    
     const toast = document.createElement('div');
-
     toast.className = `toast toast-${type}`;
+    // Mobile-friendly toast styling
     toast.style.cssText = `
         background: ${type === 'error' ? '#d32f2f' : '#333'};
-        color: white; padding: 12px; margin: 10px;
-        border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        animation: fade 0.3s;
+        color: white; 
+        padding: 12px 20px; 
+        margin: 10px; 
+        border-radius: 50px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.4); 
+        animation: fade 0.3s; 
+        z-index: 9999;
+        font-size: 14px;
+        text-align: center;
     `;
-
     toast.innerText = message;
     container.appendChild(toast);
     setTimeout(() => toast.remove(), 3000);
 };
 
-/**
- * Create card that matches GiftedTech API fields
- */
 export const createCard = (item) => {
     const div = document.createElement('div');
     div.className = 'card';
-
-    const poster =
-        item.thumbnail ||
-        item.cover?.url ||
-        'assets/placeholder.jpg';
-
-    const year = item.releaseDate
-        ? item.releaseDate.substring(0, 4)
-        : 'N/A';
-
-    const type = item.subjectType === 2 ? "Series" : "Movie";
+    
+    // IMAGE FIXER: 
+    // 1. Check if poster exists
+    // 2. If it is 'N/A' or null, use placeholder
+    let imgUrl = item.poster;
+    if (!imgUrl || imgUrl === 'N/A' || imgUrl === '') {
+        imgUrl = 'https://via.placeholder.com/300x450?text=No+Image';
+    }
 
     div.innerHTML = `
-        <img src="${poster}" alt="${item.title}" loading="lazy">
+        <div style="position: relative; width: 100%; padding-top: 150%;">
+            <img src="${imgUrl}" 
+                 alt="${item.title}" 
+                 loading="lazy" 
+                 style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover;"
+                 onerror="this.src='https://via.placeholder.com/300x450?text=Error'">
+        </div>
         <div class="card-info">
-            <div class="card-title">${item.title}</div>
-            <div class="card-year">${year} • ${type}</div>
+            <div class="card-title">${item.title || 'Untitled'}</div>
+            <div class="card-year">${item.year || ''} • ${item.type || 'Movie'}</div>
         </div>
     `;
-
-    // navigate via subjectId instead of item.id
-    div.onclick = () => window.location.hash = `#info/${item.subjectId}`;
-
+    
+    if (item.id) {
+        div.onclick = () => window.location.hash = `#info/${item.id}`;
+    }
     return div;
 };
 
 export const renderLoader = (container) => {
+    if (!container) return;
     container.innerHTML = `
-        <div class="flex center" style="height:200px">
-            <div class="skeleton" style="width:100px; height:100px"></div>
+        <div class="flex center w-full" style="height:200px; justify-content:center; align-items:center;">
+            <div class="skeleton" style="width:50px; height:50px; border-radius:50%;"></div>
         </div>
     `;
 };
