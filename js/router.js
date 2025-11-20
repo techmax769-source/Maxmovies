@@ -7,8 +7,13 @@ import { state, addToHistory } from './state.js';
 
 const container = document.getElementById('app-container');
 
+/* ----------------------------------------
+    MAIN ROUTER
+---------------------------------------- */
 export const router = async () => {
-    try { destroyPlayer(); } catch (e) {}
+    try {
+        destroyPlayer();
+    } catch {}
 
     const hash = window.location.hash.slice(1) || "home";
     const params = hash.split("/");
@@ -16,19 +21,22 @@ export const router = async () => {
 
     window.scrollTo(0, 0);
 
-    if (route === "home") return renderHome();
-    if (route === "search") return renderSearch();
-    if (route === "info") return renderInfo(params[1]);
-    if (route === "player") return renderPlayerPage(params[1], params[2], params[3]);
-    if (route === "downloads") return renderDownloads();
-    if (route === "library") return renderLibrary();
-    if (route === "settings") return renderSettings();
+    switch (route) {
+        case "home": return renderHome();
+        case "search": return renderSearch();
+        case "info": return renderInfo(params[1]);
+        case "player": return renderPlayerPage(params[1], params[2], params[3]);
+        case "downloads": return renderDownloads();
+        case "library": return renderLibrary();
+        case "settings": return renderSettings();
+        default:
+            container.innerHTML = `<div class="p-1">Page not found.</div>`;
+    }
 };
 
 /* ----------------------------------------
     HOME PAGE
 ---------------------------------------- */
-
 async function renderHome() {
     const gridId = "trending-grid";
     container.innerHTML = `
@@ -41,11 +49,11 @@ async function renderHome() {
 
     try {
         const data = await api.search("action", 1, "movie");
-        grid.innerHTML = "";
-
         const list = Array.isArray(data?.results) ? data.results : [];
 
-        if (list.length === 0) {
+        grid.innerHTML = "";
+
+        if (!list.length) {
             grid.innerHTML = `
                 <div class="p-1 text-center" style="grid-column:1/-1;">
                     <p>No content found.</p>
@@ -55,13 +63,14 @@ async function renderHome() {
             return;
         }
 
-        list.forEach(item => grid.appendChild(createCard(item)));
+        list.forEach(item => {
+            if (item?.id) grid.appendChild(createCard(item));
+        });
 
     } catch (err) {
         grid.innerHTML = `
-            <div class="p-1" style="color:red; word-break:break-all;">
-                <h3>Error</h3>
-                <p>${err.message}</p>
+            <div class="p-1" style="color:red;">
+                Error loading content.<br>${err.message}
             </div>
         `;
     }
@@ -70,7 +79,6 @@ async function renderHome() {
 /* ----------------------------------------
     SEARCH PAGE
 ---------------------------------------- */
-
 async function renderSearch() {
     container.innerHTML = `
         <div class="p-1">
@@ -86,46 +94,54 @@ async function renderSearch() {
 
     input.addEventListener("input", e => {
         clearTimeout(debounce);
-
         debounce = setTimeout(async () => {
             const query = e.target.value.trim();
-            if (!query) return;
+            if (!query) {
+                grid.innerHTML = "";
+                return;
+            }
 
             renderLoader(grid);
 
             try {
                 const data = await api.search(query);
-                grid.innerHTML = "";
-
                 const list = Array.isArray(data?.results) ? data.results : [];
 
-                if (list.length === 0) {
+                grid.innerHTML = "";
+
+                if (!list.length) {
                     grid.innerHTML = `<p class="p-1">No results found</p>`;
                     return;
                 }
 
-                list.forEach(item => grid.appendChild(createCard(item)));
+                list.forEach(item => {
+                    if (item?.id) grid.appendChild(createCard(item));
+                });
 
             } catch {
                 grid.innerHTML = `<p class="p-1" style="color:red;">Search failed</p>`;
             }
-        }, 400);
+        }, 350);
     });
 }
 
 /* ----------------------------------------
     INFO PAGE
 ---------------------------------------- */
-
 async function renderInfo(id) {
+    if (!id) {
+        container.innerHTML = `<div class="p-1">Invalid ID.</div>`;
+        return;
+    }
+
     renderLoader(container);
 
     try {
         const data = await api.getInfo(id);
 
-        const info = data?.results?.subject;
+        const info = data?.results?.subject || null;
         if (!info) {
-            container.innerHTML = `<div class="p-1 text-center">Content not found.</div>`;
+            container.innerHTML = `<div class="p-1">Content not found.</div>`;
             return;
         }
 
@@ -136,9 +152,9 @@ async function renderInfo(id) {
         });
 
         container.innerHTML = `
-            <div class="info-header" 
-                 style="background:linear-gradient(to top,#141414 10%,transparent),
-                 url(${info.poster}) center/cover; height:350px;">
+            <div class="info-header"
+                style="background:linear-gradient(to top,#141414 10%,transparent),
+                url(${info.poster}) center/cover; height:350px;">
                 <div style="position:absolute; bottom:0; padding:20px;">
                     <h1>${info.title}</h1>
                     <p>${info.year || ''} • ${info.rating || ''}</p>
@@ -160,49 +176,60 @@ async function renderInfo(id) {
         };
 
         document.getElementById("downloadBtn").onclick = async () => {
-            showToast("Fetching source...", "info");
+            showToast("Fetching download...", "info");
 
             const sources = await api.getSources(id);
+            const list = Array.isArray(sources?.results) ? sources.results : [];
 
-            if (!Array.isArray(sources?.results) || sources.results.length === 0) {
-                showToast("No download source found", "error");
+            if (!list.length) {
+                showToast("No download sources found", "error");
                 return;
             }
 
-            const best = sources.results[0];
-            startDownload(info, best.download_url || best.url);
+            const best = list[0];
+            const url = best?.download_url || best?.url;
+
+            if (!url) {
+                showToast("Invalid source", "error");
+                return;
+            }
+
+            startDownload(info, url);
         };
 
     } catch (e) {
-        container.innerHTML = `<div class="p-1">Error loading info: ${e.message}</div>`;
+        container.innerHTML = `<div class="p-1">Error: ${e.message}</div>`;
     }
 }
 
 /* ----------------------------------------
     PLAYER PAGE
 ---------------------------------------- */
-
 async function renderPlayerPage(id, season, episode) {
     container.innerHTML = `<div id="player-mount" style="height:100vh; background:black;"></div>`;
-    showToast("Loading Stream...", "info");
+    showToast("Loading stream...", "info");
 
     try {
-        const data = await api.getSources(id, season, episode);
+        const srcData = await api.getSources(id, season, episode);
+        const list = Array.isArray(srcData?.results) ? srcData.results : [];
 
-        const list = Array.isArray(data?.results) ? data.results : [];
-
-        if (list.length === 0) {
+        if (!list.length) {
             container.innerHTML = `<div class="p-1 center">No Video Sources Found</div>`;
             return;
         }
 
-        const src =
+        const source =
             list.find(s => s.url?.includes(".m3u8")) ||
             list[0];
 
+        if (!source?.url) {
+            container.innerHTML = `<div class="p-1 center">Invalid streaming source.</div>`;
+            return;
+        }
+
         initPlayer(
             document.getElementById("player-mount"),
-            src.url,
+            source.url,
             ""
         );
 
@@ -214,18 +241,16 @@ async function renderPlayerPage(id, season, episode) {
 /* ----------------------------------------
     DOWNLOADS PAGE
 ---------------------------------------- */
-
 async function renderDownloads() {
     try {
-        const items = await db.getAll();
-        const safe = items || [];
+        const items = (await db.getAll()) || [];
 
         container.innerHTML = `
             <div class="p-1">
                 <h2>Downloads</h2>
-                ${safe.length === 0 ? "<p>No downloads yet.</p>" : ""}
+                ${items.length === 0 ? "<p>No downloads yet.</p>" : ""}
                 <div class="media-grid">
-                    ${safe.map(item => `
+                    ${items.map(item => `
                         <div class="card" onclick="playOffline('${item.id}')">
                             <img src="${item.poster}">
                             <div class="card-info">
@@ -242,7 +267,7 @@ async function renderDownloads() {
             const item = all.find(i => i.id === id);
 
             if (!item?.blob) {
-                showToast("File corrupted or missing", "error");
+                showToast("File missing or corrupted", "error");
                 return;
             }
 
@@ -259,7 +284,6 @@ async function renderDownloads() {
 /* ----------------------------------------
     LIBRARY PAGE
 ---------------------------------------- */
-
 async function renderLibrary() {
     const history = state.history || [];
 
@@ -282,7 +306,6 @@ async function renderLibrary() {
 /* ----------------------------------------
     SETTINGS PAGE
 ---------------------------------------- */
-
 async function renderSettings() {
     container.innerHTML = `
         <div class="p-1">
@@ -291,7 +314,7 @@ async function renderSettings() {
                 Reset App Data
             </button>
             <br><br>
-            <p>Version: 1.1.0 (Fixed)</p>
+            <p>Version: 1.1.0 (Stable)</p>
         </div>
     `;
 }
