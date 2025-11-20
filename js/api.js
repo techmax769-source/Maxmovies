@@ -5,13 +5,15 @@ const BASE_URL = 'https://movieapi.giftedtech.co.ke/api';
 
 export const api = {
     async fetch(endpoint) {
+        // If user manually turned on Mock Mode, use it.
         if (state.mockMode) return this.mockFetch(endpoint);
 
         try {
             const controller = new AbortController();
-            // Increased timeout to 15s as these APIs can be slow
+            // Give the API 15 seconds to respond
             const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
+            console.log(`Fetching: ${BASE_URL}${endpoint}`); // Debug log
             const response = await fetch(`${BASE_URL}${endpoint}`, {
                 signal: controller.signal
             });
@@ -22,71 +24,53 @@ export const api = {
             return await response.json();
 
         } catch (error) {
-            console.warn('API Error, switching to fallback:', error);
-            // Only show toast if it's a real user interaction, not background fetch
-            if(!endpoint.includes('auto')) showToast('Connection issue. Using Offline Data.', 'error');
-            return this.mockFetch(endpoint);
+            console.error('API Failed:', error);
+            showToast('Network error. Showing Offline Data.', 'error');
+            return this.mockFetch(endpoint); // Fallback to "Cyber Dystopia" if real API fails
         }
     },
 
     async search(query, page = 1, type = 'movie') {
-        // 1. Fetch the raw data
+        // 1. Fetch the raw data from GiftedTech
         const data = await this.fetch(`/search/${query}?page=${page}&type=${type}`);
         
-        // 2. MAP THE DATA (This is where the fix is)
-        // Your JSON showed the movies are inside data.results.items
+        // 2. CHECK & TRANSLATE (The Fix)
+        // The API puts the list inside: data.results.items
         if (data && data.results && Array.isArray(data.results.items)) {
+            console.log("GiftedTech Data Found, Translating...");
             return { 
                 results: data.results.items.map(item => {
-                    // Extract Year from "2025-11-05"
-                    let year = 'N/A';
-                    if (item.releaseDate) {
-                        year = item.releaseDate.split('-')[0];
-                    }
+                    // 1. Fix Image
+                    let img = 'assets/placeholder.jpg';
+                    if (item.cover && item.cover.url) img = item.cover.url;
+                    else if (item.thumbnail) img = item.thumbnail;
 
-                    // Extract Image safely
-                    let posterImage = 'assets/placeholder.jpg';
-                    if (item.cover && item.cover.url) {
-                        posterImage = item.cover.url;
-                    } else if (item.thumbnail) {
-                        posterImage = item.thumbnail;
-                    }
+                    // 2. Fix Year (from "2025-11-05" to "2025")
+                    let year = item.releaseDate ? item.releaseDate.split('-')[0] : 'N/A';
+
+                    // 3. Fix Type (API uses numbers: 2=Movie)
+                    let mediaType = 'movie';
+                    if (item.subjectType === 1) mediaType = 'series';
 
                     return {
-                        // MAP 'subjectId' -> 'id'
-                        id: item.subjectId || item.id, 
-                        
-                        // MAP 'title' -> 'title'
+                        id: item.subjectId,   // CRITICAL: Maps subjectId -> id
                         title: item.title,
-                        
-                        // MAP 'releaseDate' -> 'year'
                         year: year,
-                        
-                        // MAP 'subjectType' -> 'type' (Guessing: 2=Movie, 1=Series)
-                        type: item.subjectType === 2 ? 'movie' : 'series',
-                        
-                        // MAP 'cover.url' -> 'poster'
-                        poster: posterImage,
-                        
-                        // MAP 'imdbRatingValue' -> 'rating'
+                        type: mediaType,
+                        poster: img,          // CRITICAL: Maps cover.url -> poster
                         rating: item.imdbRatingValue || 'N/A'
                     };
                 })
             };
         }
         
-        // Fallback for Mock Data or if structure changes
+        // If data format is standard (or fallback), return as is
         return data;
     },
 
     async getInfo(id) {
-        // Note: You might need to update this once we see the /info/{id} JSON response
-        // For now, we assume it might return similar fields
-        const data = await this.fetch(`/info/${id}`);
-        
-        // If the info response wraps data in 'result' or similar, handle it here
-        // returning strictly what the UI expects
-        return data;
+        // Pass through for now
+        return this.fetch(`/info/${id}`);
     },
 
     async getSources(id, season = null, episode = null) {
@@ -98,6 +82,7 @@ export const api = {
     },
 
     async mockFetch(endpoint) {
+        // This functions loads "Cyber Dystopia" from your local files
         await new Promise(r => setTimeout(r, 500));
         try {
             if (endpoint.includes('/search')) return await (await fetch('./mock/search.json')).json();
