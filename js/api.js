@@ -9,7 +9,8 @@ export const api = {
 
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s Timeout
+            // 15s timeout for slow networks
+            const timeoutId = setTimeout(() => controller.abort(), 15000); 
 
             const response = await fetch(`${BASE_URL}${endpoint}`, {
                 signal: controller.signal
@@ -22,71 +23,75 @@ export const api = {
 
         } catch (error) {
             console.warn('API Failed:', error);
-            showToast('Connection unstable. Using Offline Data.', 'error');
+            // Only show error toast if it's not an auto-fetch
+            if(!endpoint.includes('auto')) showToast('Connection issue. Using Offline Data.', 'error');
             return this.mockFetch(endpoint);
         }
     },
 
+    // --- 1. SEARCH ADAPTER ---
     async search(query, page = 1, type = 'movie') {
-        // 1. Get Raw Data
+        // Using the standard endpoint provided in your logs
         const data = await this.fetch(`/search/${query}?page=${page}&type=${type}`);
         
-        // 2. ADAPTER: Translate GiftedTech format to App format
-        // API Structure: { results: { items: [ ... ] } }
+        // Fix based on your snippet: data.results.items
         if (data && data.results && Array.isArray(data.results.items)) {
-            
-            const cleanResults = data.results.items.map(item => {
-                // IMAGE FIX: Check 'cover.url', then 'thumbnail', then 'poster'
-                let finalImage = 'assets/placeholder.jpg';
-                if (item.cover && item.cover.url) finalImage = item.cover.url;
-                else if (item.thumbnail) finalImage = item.thumbnail;
-                else if (item.poster) finalImage = item.poster;
+            return { 
+                results: data.results.items.map(item => this.normalizeItem(item))
+            };
+        }
+        return data;
+    },
 
-                // ID FIX: Check 'subjectId', then 'id'
-                const finalId = item.subjectId || item.id;
+    // --- 2. INFO ADAPTER ---
+    async getInfo(id) {
+        const data = await this.fetch(`/info/${id}`);
 
-                // YEAR FIX: Extract "2025" from "2025-11-05"
-                let finalYear = 'N/A';
-                if (item.releaseDate) finalYear = item.releaseDate.split('-')[0];
-                else if (item.year) finalYear = item.year;
-
-                // TYPE FIX: API uses numbers (2 = movie?)
-                // We treat everything as 'movie' unless specified otherwise to be safe
-                const finalType = (item.subjectType === 1 || item.type === 'series') ? 'series' : 'movie';
-
-                return {
-                    id: finalId,
-                    title: item.title || 'Untitled',
-                    year: finalYear,
-                    type: finalType,
-                    poster: finalImage,
-                    rating: item.imdbRatingValue || item.rating || 'N/A'
-                };
-            });
-
-            return { results: cleanResults };
+        // Fix based on your snippet: data.results.subject
+        if (data && data.results && data.results.subject) {
+            return this.normalizeItem(data.results.subject);
         }
         
         return data;
     },
 
-    async getInfo(id) {
-        // The /info endpoint likely returns the same "GiftedTech" structure.
-        // We pass it through, but the UI needs to handle the fields.
-        const data = await this.fetch(`/info/${id}`);
-        
-        // If data is wrapped in 'data' or 'result', unwrap it here
-        if(data && data.result) return data.result;
-        
-        return data;
-    },
-
+    // --- 3. SOURCES ADAPTER ---
     async getSources(id, season = null, episode = null) {
         let url = `/sources/${id}`;
         if (season && episode) {
             url += `?season=${season}&episode=${episode}`;
         }
         return this.fetch(url);
+    },
+
+    // --- HELPER: Standardizes "GiftedTech" weird data to "MaxMovies" format ---
+    normalizeItem(item) {
+        // 1. Fix Image (Check cover.url first, as seen in your logs)
+        let img = 'assets/placeholder.jpg';
+        if (item.cover && item.cover.url) img = item.cover.url;
+        else if (item.thumbnail) img = item.thumbnail;
+        else if (item.poster) img = item.poster;
+
+        // 2. Fix ID (Use subjectId)
+        const finalId = item.subjectId || item.id;
+
+        // 3. Fix Year (2025-11-05 -> 2025)
+        let finalYear = 'N/A';
+        if (item.releaseDate) finalYear = item.releaseDate.split('-')[0];
+        else if (item.year) finalYear = item.year;
+
+        // 4. Fix Type
+        const finalType = (item.subjectType === 1 || item.type === 'series') ? 'series' : 'movie';
+
+        return {
+            id: finalId,
+            title: item.title || 'Untitled',
+            year: finalYear,
+            type: finalType,
+            poster: img,
+            description: item.description || item.plot || '',
+            rating: item.imdbRatingValue || item.rating || 'N/A'
+        };
     },
 
     async mockFetch(endpoint) {
