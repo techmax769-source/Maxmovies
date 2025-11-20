@@ -8,7 +8,7 @@ import { state, addToHistory } from './state.js';
 const container = document.getElementById('app-container');
 
 export const router = async () => {
-    // 1. Cleanup video player when switching pages
+    // 1. Cleanup video player when switching pages to save memory
     try {
         destroyPlayer(); 
     } catch (e) { 
@@ -36,25 +36,24 @@ export const router = async () => {
 async function renderHome() {
     const gridId = 'trending-grid';
     container.innerHTML = `
-        <div class="hero p-1"><h1>New Releases</h1></div>
+        <div class="hero p-1"><h1>Trending Action</h1></div>
         <div id="${gridId}" class="media-grid"></div>
     `;
     renderLoader(document.getElementById(gridId));
 
     try {
-        // Search for "2024" to get recent movies
-        // (The API adapter we wrote in api.js handles the nested structure)
-        const data = await api.search('2024', 1, 'movie'); 
+        // FIX: We search 'action' because we confirmed this works in your logs
+        const data = await api.search('action', 1, 'movie'); 
         const grid = document.getElementById(gridId);
         grid.innerHTML = ''; 
 
-        // STRICT CHECK: Ensure we have a list
+        // FIX: Strict check to ensure we have a list
         if (!data || !data.results || !Array.isArray(data.results) || data.results.length === 0) {
             console.warn("Home: No data found", data);
             grid.innerHTML = `
                 <div class="p-1 text-center" style="grid-column: 1/-1;">
-                    <p>No trending content found.</p>
-                    <small style="color:gray">Try searching manually.</small>
+                    <p>No movies found.</p>
+                    <small style="color:gray">Server might be busy.</small>
                     <br><br>
                     <button class="btn" onclick="window.location.reload()">Retry</button>
                 </div>
@@ -67,9 +66,10 @@ async function renderHome() {
 
     } catch (err) {
         console.error("Render Error:", err);
+        // PRINT ERROR ON SCREEN FOR MOBILE DEBUGGING
         document.getElementById(gridId).innerHTML = `
-            <div class="p-1" style="color: red;">
-                <h3>Error Loading Home</h3>
+            <div class="p-1" style="color: red; word-break: break-all;">
+                <h3>❌ Error Loading Home</h3>
                 <p>${err.message}</p>
             </div>
         `;
@@ -118,47 +118,52 @@ async function renderInfo(id) {
     try {
         const info = await api.getInfo(id);
         
-        if (!info || !info.id) {
+        // Robust check: ensure info exists
+        // Note: The API might behave differently for /info vs /search.
+        // If mapping fails, we try to show what we have.
+        if (!info) {
             container.innerHTML = '<div class="p-1 text-center">Content details not found.</div>';
             return;
         }
 
-        // Save to History
-        addToHistory({ id: info.id, title: info.title, poster: info.poster });
+        // Map fields if they come in raw from the API (Covering both cases)
+        const title = info.title || info.name || 'Unknown Title';
+        const poster = info.poster || (info.cover ? info.cover.url : null) || 'assets/placeholder.jpg';
+        const year = info.year || (info.releaseDate ? info.releaseDate.split('-')[0] : 'N/A');
+        const desc = info.description || 'No description available.';
 
-        // Handle background image safely
-        const bgImage = (info.poster && info.poster !== 'N/A') ? info.poster : 'https://via.placeholder.com/300x450';
-        
+        // Save to History
+        addToHistory({ id: id, title: title, poster: poster });
+
         container.innerHTML = `
-            <div class="info-header" style="background: linear-gradient(to top, #141414 10%, transparent), url(${bgImage}) center/cover; height: 350px; position: relative;">
+            <div class="info-header" style="background: linear-gradient(to top, #141414 10%, transparent), url(${poster}) center/cover; height: 350px; position: relative;">
                 <div style="position:absolute; bottom:0; width:100%; padding: 20px;">
-                    <h1>${info.title || 'Unknown Title'}</h1>
-                    <p>${info.year || ''} • ${info.rating || ''}</p>
+                    <h1>${title}</h1>
+                    <p>${year}</p>
                 </div>
             </div>
             <div class="p-1">
-                <p>${info.description || 'No description available.'}</p>
+                <p>${desc}</p>
                 <div class="flex gap-1 m-1">
                     <button id="playBtn" class="btn">▶ Play</button>
                     <button id="downloadBtn" class="btn btn-secondary">⬇ Download</button>
                 </div>
                 
-                ${(info.type === 'TV Series' || info.type === 'series') ? `
+                ${(info.subjectType === 1 || info.type === 'series') ? `
                     <h3>Episodes</h3>
                     <div class="flex flex-col gap-1">
                         <button class="btn-secondary w-full text-center" onclick="location.hash='#player/${id}/1/1'">Season 1 Ep 1</button>
-                        <!-- Add more episodes logic here if API supports it -->
                     </div>
                 ` : ''}
             </div>
         `;
 
         document.getElementById('playBtn').onclick = () => {
-            // If it's a series, default to S1 E1, else just Movie ID
-            if(info.type === 'TV Series' || info.type === 'series') {
-                window.location.hash = `#player/${id}/1/1`;
+            // Default behavior: go to player
+            if(info.subjectType === 1 || info.type === 'series') {
+                 window.location.hash = `#player/${id}/1/1`;
             } else {
-                window.location.hash = `#player/${id}`;
+                 window.location.hash = `#player/${id}`;
             }
         };
 
@@ -166,8 +171,17 @@ async function renderInfo(id) {
             showToast('Fetching source...', 'info');
             try {
                 const source = await api.getSources(id);
-                if(source && source.sources && source.sources.length > 0) {
-                    startDownload({id: info.id, title: info.title, poster: info.poster}, source.sources[0].url);
+                // Check for various API source formats
+                const validSources = source.sources || source.results || [];
+                
+                if(validSources.length > 0) {
+                    // Use first available source
+                    const downloadUrl = validSources[0].url || validSources[0].download_url;
+                    if(downloadUrl) {
+                        startDownload({id: id, title: title, poster: poster}, downloadUrl);
+                    } else {
+                        showToast('Source URL missing', 'error');
+                    }
                 } else {
                     showToast('No download source found', 'error');
                 }
@@ -186,8 +200,9 @@ async function renderPlayerPage(id, season, episode) {
     
     try {
         const sources = await api.getSources(id, season, episode);
+        const validSources = sources.sources || sources.results || [];
         
-        if (!sources || !sources.sources || !sources.sources.length) {
+        if (!validSources || validSources.length === 0) {
             container.innerHTML = `
                 <div class="p-1 center flex-col" style="height:100vh">
                     <p>No Video Sources Found</p>
@@ -196,9 +211,11 @@ async function renderPlayerPage(id, season, episode) {
             return;
         }
 
-        // Priority: M3U8 (HLS) -> MP4 -> First Available
-        const hlsSource = sources.sources.find(s => s.url.includes('.m3u8')) || sources.sources[0];
-        initPlayer(document.getElementById('player-mount'), hlsSource.url, '');
+        // Priority: M3U8 (HLS) -> MP4
+        const hlsSource = validSources.find(s => (s.url || s.download_url).includes('.m3u8')) || validSources[0];
+        const finalUrl = hlsSource.url || hlsSource.download_url;
+
+        initPlayer(document.getElementById('player-mount'), finalUrl, '');
 
     } catch (e) {
         container.innerHTML = `<div class="p-1 center" style="height:100vh; color:red">Stream Error: ${e.message}</div>`;
@@ -208,6 +225,7 @@ async function renderPlayerPage(id, season, episode) {
 async function renderDownloads() {
     try {
         const items = await db.getAll();
+        // FIX: Safe check (items || []) prevents "map" errors
         const safeItems = items || [];
 
         container.innerHTML = `
@@ -242,6 +260,7 @@ async function renderDownloads() {
 }
 
 async function renderLibrary() {
+    // FIX: Uses imported state safely
     const history = state.history || [];
 
     container.innerHTML = `
@@ -266,7 +285,7 @@ async function renderSettings() {
             <h2>Settings</h2>
             <button class="btn btn-secondary" onclick="localStorage.clear(); location.reload()">Reset App Data</button>
             <br><br>
-            <p>Version: 1.2.0 (Stable)</p>
+            <p>Version: 1.3.0 (API Adapted)</p>
         </div>
     `;
 }
