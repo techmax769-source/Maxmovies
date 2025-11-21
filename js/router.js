@@ -41,7 +41,6 @@ async function renderHome() {
     renderLoader(grid);
 
     try {
-        // GiftedMovie search endpoint works with simple keyword
         const data = await api.search("action");
         grid.innerHTML = "";
 
@@ -65,7 +64,6 @@ async function renderHome() {
    SEARCH PAGE
    ============================================================ */
 async function renderSearch() {
-
     container.innerHTML = `
         <div class="p-1">
             <input type="text" id="searchInput" class="search-bar" placeholder="Search movies & series...">
@@ -104,7 +102,7 @@ async function renderSearch() {
 }
 
 /* ============================================================
-   INFO PAGE
+   INFO PAGE (Updated Layout)
    ============================================================ */
 async function renderInfo(id) {
     renderLoader(container);
@@ -130,37 +128,50 @@ async function renderInfo(id) {
 
         addToHistory({ id, title, poster });
 
+        /* === NEW LAYOUT === */
         container.innerHTML = `
             <div class="info-header"
-                style="background: linear-gradient(to top,#141414 10%,transparent),
-                url(${poster}) center/cover; height: 350px;">
-                <div style="position:absolute; bottom:0; padding:20px;">
-                    <h1>${title}</h1>
-                    <p>${year} • ⭐ ${rating}</p>
-                </div>
+                style="
+                    background: linear-gradient(to bottom, rgba(0,0,0,0.3), var(--dark)),
+                    url(${poster}) center/cover;
+                    height: 50vh;
+                    min-height: 300px;
+                    position: relative;">
             </div>
 
-            <div class="p-1">
-                <p>${desc}</p>
+            <div class="info-content">
 
-                <div class="flex gap-1 m-1">
-                    <button id="playBtn" class="btn">▶ Play</button>
-                    <button id="downloadBtn" class="btn btn-secondary">⬇ Download</button>
+                <h1 class="movie-title-large">${title}</h1>
+
+                <div class="movie-meta">
+                    <span>${year}</span>
+                    <span>•</span>
+                    <span style="color: gold;">★ ${rating}</span>
+                    <span>•</span>
+                    <span>${info.type === "series" || info.subjectType === 1 ? "TV Series" : "Movie"}</span>
                 </div>
 
+                <div class="action-buttons">
+                    <button id="playBtn" class="btn btn-lg">▶ Play</button>
+                    <button id="downloadBtn" class="btn btn-secondary btn-lg">⬇ Download</button>
+                </div>
+
+                <p class="movie-description">${desc}</p>
+
                 ${
-                    info.type === "series"
+                    info.type === "series" || info.subjectType === 1
                         ? `
-                        <h3>Episodes</h3>
-                        <div id="episodes" class="flex-col"></div>
-                    `
+                        <div style="margin-top: 2rem;">
+                            <h3>Episodes</h3>
+                            <div id="episodes" class="flex-col" style="margin-top: 1rem;"></div>
+                        </div>`
                         : ""
                 }
             </div>
         `;
 
-        /* --- SERIES EPISODE LIST --- */
-        if (info.type === "series") {
+        /* === EPISODE LOADING (GiftedMovie API) === */
+        if (info.type === "series" || info.subjectType === 1) {
             const epsDiv = document.getElementById("episodes");
 
             const sources = await api.getSources(id);
@@ -182,8 +193,8 @@ async function renderInfo(id) {
             }
         }
 
-        /* --- PLAY BUTTON --- */
-        document.getElementById("playBtn").onclick = async () => {
+        /* === PLAY BUTTON === */
+        document.getElementById("playBtn").onclick = () => {
             if (info.type === "series") {
                 window.location.hash = `#player/${id}/1/1`;
             } else {
@@ -191,13 +202,13 @@ async function renderInfo(id) {
             }
         };
 
-        /* --- DOWNLOAD BUTTON --- */
+        /* === DOWNLOAD BUTTON === */
         document.getElementById("downloadBtn").onclick = async () => {
             showToast("Fetching download link...", "info");
 
             const data = await api.getSources(id);
-
             const best = data.sources?.slice(-1)[0];
+
             if (!best?.download)
                 return showToast("No download link available.", "error");
 
@@ -210,7 +221,7 @@ async function renderInfo(id) {
 }
 
 /* ============================================================
-   PLAYER PAGE (Supports Series & Subtitles)
+   PLAYER PAGE (Series + Subtitles)
    ============================================================ */
 async function renderPlayerPage(id, season, episode) {
     container.innerHTML = `
@@ -224,13 +235,11 @@ async function renderPlayerPage(id, season, episode) {
 
         let selected;
 
-        // SERIES MODE
         if (season && episode) {
             const s = data.seasons?.find(x => x.season == season);
             const ep = s?.episodes?.find(e => e.episode == episode);
             selected = ep?.streams?.slice(-1)[0];
         } else {
-            // MOVIE MODE
             selected = data.sources?.slice(-1)[0];
         }
 
