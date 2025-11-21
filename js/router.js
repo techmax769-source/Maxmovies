@@ -28,7 +28,7 @@ export const router = () => {
 };
 
 /* ============================================================
-   HOME PAGE
+   HOME
    ============================================================ */
 async function renderHome() {
     const gridId = "trending-grid";
@@ -42,6 +42,7 @@ async function renderHome() {
 
     try {
         const data = await api.search("action");
+
         grid.innerHTML = "";
 
         if (!data.results.length) {
@@ -61,7 +62,7 @@ async function renderHome() {
 }
 
 /* ============================================================
-   SEARCH PAGE
+   SEARCH
    ============================================================ */
 async function renderSearch() {
     container.innerHTML = `
@@ -102,7 +103,7 @@ async function renderSearch() {
 }
 
 /* ============================================================
-   INFO PAGE (Updated Layout)
+   INFO PAGE
    ============================================================ */
 async function renderInfo(id) {
     renderLoader(container);
@@ -111,32 +112,20 @@ async function renderInfo(id) {
         const info = await api.getInfo(id);
 
         if (!info) {
-            container.innerHTML = `<div class="p-1">Movie not found.</div>`;
+            container.innerHTML = `<div class="p-1">Not found.</div>`;
             return;
         }
 
-        const title = info.title || "Untitled";
-        const desc = info.description || "No description available";
-        const year = info.year || "N/A";
-        const rating = info.rating || "N/A";
-
-        const poster =
-            info.poster ||
-            info.thumbnail ||
-            info.cover?.url ||
-            "assets/placeholder.jpg";
+        const { title, description, poster, year, rating, type } = info;
 
         addToHistory({ id, title, poster });
 
-        /* === NEW LAYOUT === */
         container.innerHTML = `
             <div class="info-header"
                 style="
                     background: linear-gradient(to bottom, rgba(0,0,0,0.3), var(--dark)),
                     url(${poster}) center/cover;
-                    height: 50vh;
-                    min-height: 300px;
-                    position: relative;">
+                    height: 50vh;">
             </div>
 
             <div class="info-content">
@@ -148,7 +137,7 @@ async function renderInfo(id) {
                     <span>•</span>
                     <span style="color: gold;">★ ${rating}</span>
                     <span>•</span>
-                    <span>${info.type === "series" || info.subjectType === 1 ? "TV Series" : "Movie"}</span>
+                    <span>${type === "series" ? "TV Series" : "Movie"}</span>
                 </div>
 
                 <div class="action-buttons">
@@ -156,10 +145,10 @@ async function renderInfo(id) {
                     <button id="downloadBtn" class="btn btn-secondary btn-lg">⬇ Download</button>
                 </div>
 
-                <p class="movie-description">${desc}</p>
+                <p class="movie-description">${description}</p>
 
                 ${
-                    info.type === "series" || info.subjectType === 1
+                    type === "series"
                         ? `
                         <div style="margin-top: 2rem;">
                             <h3>Episodes</h3>
@@ -170,58 +159,62 @@ async function renderInfo(id) {
             </div>
         `;
 
-        /* === EPISODE LOADING (GiftedMovie API) === */
-        if (info.type === "series" || info.subjectType === 1) {
+        /* === Load Episodes for Series === */
+        if (type === "series") {
             const epsDiv = document.getElementById("episodes");
+            const sourceData = await api.getSources(id);
 
-            const sources = await api.getSources(id);
-            const seasons = sources.seasons || [];
-
-            if (seasons.length === 0) {
-                epsDiv.innerHTML = "<p>No episodes found.</p>";
-            } else {
-                seasons.forEach(season => {
-                    season.episodes.forEach(ep => {
-                        const btn = document.createElement("button");
-                        btn.className = "btn-secondary";
-                        btn.textContent = `S${season.season} • E${ep.episode} — ${ep.title}`;
-                        btn.onclick = () =>
-                            (window.location.hash = `#player/${id}/${season.season}/${ep.episode}`);
-                        epsDiv.appendChild(btn);
-                    });
-                });
+            if (!Array.isArray(sourceData)) {
+                epsDiv.innerHTML = "<p>No episodes available.</p>";
+                return;
             }
+
+            sourceData.forEach(season => {
+                season.episodes.forEach(ep => {
+                    const btn = document.createElement("button");
+                    btn.className = "btn-secondary";
+                    btn.textContent = `S${season.season} • E${ep.episode} — ${ep.title}`;
+                    btn.onclick = () =>
+                        (location.hash = `#player/${id}/${season.season}/${ep.episode}`);
+                    epsDiv.appendChild(btn);
+                });
+            });
         }
 
-        /* === PLAY BUTTON === */
+        /* Play Button */
         document.getElementById("playBtn").onclick = () => {
-            if (info.type === "series") {
-                window.location.hash = `#player/${id}/1/1`;
+            if (type === "series") {
+                location.hash = `#player/${id}/1/1`;
             } else {
-                window.location.hash = `#player/${id}`;
+                location.hash = `#player/${id}`;
             }
         };
 
-        /* === DOWNLOAD BUTTON === */
+        /* Download Button */
         document.getElementById("downloadBtn").onclick = async () => {
             showToast("Fetching download link...", "info");
 
-            const data = await api.getSources(id);
-            const best = data.sources?.slice(-1)[0];
+            const sources = await api.getSources(id);
 
-            if (!best?.download)
-                return showToast("No download link available.", "error");
+            // movie mode
+            const movie = Array.isArray(sources.sources)
+                ? sources.sources.slice(-1)[0]
+                : null;
 
-            startDownload({ id, title, poster }, best.download);
+            const best = movie?.download || movie?.stream;
+
+            if (!best) return showToast("No download link available.", "error");
+
+            startDownload({ id, title, poster }, best);
         };
 
     } catch (err) {
-        container.innerHTML = `<p class="p-1">Error: ${err.message}</p>`;
+        container.innerHTML = `<p class="p-1">${err.message}</p>`;
     }
 }
 
 /* ============================================================
-   PLAYER PAGE (Series + Subtitles)
+   PLAYER (Supports Series, Subtitles, Movies)
    ============================================================ */
 async function renderPlayerPage(id, season, episode) {
     container.innerHTML = `
@@ -236,7 +229,7 @@ async function renderPlayerPage(id, season, episode) {
         let selected;
 
         if (season && episode) {
-            const s = data.seasons?.find(x => x.season == season);
+            const s = data.find(x => x.season == season);
             const ep = s?.episodes?.find(e => e.episode == episode);
             selected = ep?.streams?.slice(-1)[0];
         } else {
@@ -248,13 +241,11 @@ async function renderPlayerPage(id, season, episode) {
             return;
         }
 
-        const subtitles = selected.subtitles || [];
-
         initPlayer(
             document.getElementById("player-mount"),
             selected.url,
             "",
-            subtitles
+            selected.subtitles || []
         );
 
     } catch (err) {
@@ -263,7 +254,7 @@ async function renderPlayerPage(id, season, episode) {
 }
 
 /* ============================================================
-   DOWNLOADS PAGE
+   DOWNLOADS
    ============================================================ */
 async function renderDownloads() {
     const list = await db.getAll();
@@ -271,14 +262,14 @@ async function renderDownloads() {
     container.innerHTML = `
         <div class="p-1">
             <h2>Downloads</h2>
-            ${list.length === 0 ? "<p>No downloads.</p>" : ""}
+            ${!list.length ? "<p>No downloads.</p>" : ""}
             <div class="media-grid">
                 ${list
                     .map(
-                        item => `
-                    <div class="card" onclick="playOffline('${item.id}')">
-                        <img src="${item.poster}">
-                        <div class="card-info"><div class="card-title">${item.title}</div></div>
+                        i => `
+                    <div class="card" onclick="playOffline('${i.id}')">
+                        <img src="${i.poster}">
+                        <div class="card-info"><div class="card-title">${i.title}</div></div>
                     </div>
                 `
                     )
@@ -291,7 +282,7 @@ async function renderDownloads() {
         const list = await db.getAll();
         const item = list.find(i => i.id === id);
 
-        if (!item?.blob) return showToast("Download corrupted.", "error");
+        if (!item?.blob) return showToast("Download broken", "error");
 
         const url = URL.createObjectURL(item.blob);
         container.innerHTML = `<div id="player-mount" style="height:100vh"></div>`;
@@ -300,7 +291,7 @@ async function renderDownloads() {
 }
 
 /* ============================================================
-   LIBRARY PAGE
+   LIBRARY
    ============================================================ */
 function renderLibrary() {
     const items = state.history || [];
@@ -308,14 +299,14 @@ function renderLibrary() {
     container.innerHTML = `
         <div class="p-1">
             <h2>Recently Watched</h2>
-            ${items.length === 0 ? "<p>No history recorded.</p>" : ""}
+            ${!items.length ? "<p>No history found.</p>" : ""}
             <div class="media-grid">
                 ${items
                     .map(
-                        item => `
-                    <div class="card" onclick="location.hash='#info/${item.id}'">
-                        <img src="${item.poster}">
-                        <div class="card-info"><div class="card-title">${item.title}</div></div>
+                        i => `
+                    <div class="card" onclick="location.hash='#info/${i.id}'">
+                        <img src="${i.poster}">
+                        <div class="card-info"><div class="card-title">${i.title}</div></div>
                     </div>
                 `
                     )
@@ -326,7 +317,7 @@ function renderLibrary() {
 }
 
 /* ============================================================
-   SETTINGS PAGE
+   SETTINGS
    ============================================================ */
 function renderSettings() {
     container.innerHTML = `
