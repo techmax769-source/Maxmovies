@@ -1,11 +1,9 @@
 import { state } from './state.js';
 import { showToast } from './ui.js';
 
-/* IMPORTANT:
-   Remove the trailing slash — makes URL building reliable.
-*/
 const BASE_URL = "https://movieapi.giftedtech.co.ke/api";
 
+/* Clean URL join — prevents //api//sources bug */
 function joinUrl(base, path) {
   return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
 }
@@ -13,7 +11,7 @@ function joinUrl(base, path) {
 export const api = {
 
   /* ------------------------
-     GENERIC FETCH WRAPPER
+       GENERIC FETCH WRAPPER
   ------------------------- */
   async fetch(endpoint) {
     if (state.mockMode) return this.mockFetch(endpoint);
@@ -28,31 +26,21 @@ export const api = {
       const response = await fetch(url, {
         method: "GET",
         signal: controller.signal,
-        headers: {
-          "Accept": "application/json"
-        }
+        headers: { "Accept": "application/json" }
       });
 
       clearTimeout(timeout);
 
       console.log("[API] Status:", response.status);
 
-      // Try to read body text anyway (if error)
       if (!response.ok) {
         let body = "";
         try { body = await response.text(); } catch (_) {}
-
         console.error(
           "%c[API ERROR RESPONSE]",
           "color:red;font-weight:bold",
-          {
-            status: response.status,
-            statusText: response.statusText,
-            url,
-            body
-          }
+          { status: response.status, url, body }
         );
-
         throw new Error("API Error " + response.status);
       }
 
@@ -60,12 +48,7 @@ export const api = {
     }
 
     catch (err) {
-      console.error(
-        "%c[API FETCH ERROR]",
-        "color:red;font-weight:bold",
-        err.message,
-        err
-      );
+      console.error("%c[API FETCH ERROR]", "color:red;font-weight:bold", err);
 
       if (err.name === "AbortError") {
         console.warn("Request aborted (timeout).");
@@ -77,7 +60,7 @@ export const api = {
   },
 
   /* ------------------------
-     SEARCH
+       SEARCH
   ------------------------- */
   async search(query) {
     const q = encodeURIComponent(query);
@@ -93,7 +76,7 @@ export const api = {
   },
 
   /* ------------------------
-     INFO
+       INFO
   ------------------------- */
   async getInfo(id) {
     const data = await this.fetch(`info/${id}`);
@@ -106,10 +89,12 @@ export const api = {
   },
 
   /* ------------------------
-     SOURCES
+       SOURCES (FULLY FIXED)
   ------------------------- */
   async getSources(id, season = null, episode = null) {
-    let endpoint = `sources/${id}`;
+
+    /* GiftedTech API requires subjectId */
+    let endpoint = `sources/${id}`; // fixed (NO leading /)
 
     if (season && episode) {
       endpoint += `?season=${season}&episode=${episode}`;
@@ -119,24 +104,26 @@ export const api = {
 
     if (!Array.isArray(data?.results)) return [];
 
+    /* CORRECT mapping: stream_url + download_url */
     return data.results.map(src => ({
       id: src.id || null,
       quality: src.quality || "Unknown",
       size: src.size || null,
       format: src.format || null,
 
-      stream: src.download_url || null,
-      download: src.download_url || null,
+      stream: src.stream_url || null,     // ← FIXED
+      download: src.download_url || null, // ← FIXED
 
       raw: src
     }));
   },
 
   /* ------------------------
-     NORMALIZE ITEM
+       NORMALIZE ITEM
+       Ensures correct ID (subjectId)
   ------------------------- */
   normalizeItem(item) {
-    let poster =
+    const poster =
       item?.cover?.url ||
       item?.thumbnail ||
       item?.poster ||
@@ -144,20 +131,19 @@ export const api = {
       "assets/placeholder.jpg";
 
     let year = "N/A";
-
     if (item.releaseDate) {
       year = item.releaseDate.split("-")[0];
     } else if (item.year) {
       year = item.year;
     }
 
-    let finalType =
+    const finalType =
       item.subjectType === 2 || item.type === "series"
         ? "series"
         : "movie";
 
     return {
-      id: item.subjectId || item.id,
+      id: item.subjectId ?? item.id,   // ← subjectId FIRST
       title: item.title || "Untitled",
       year,
       type: finalType,
@@ -168,7 +154,7 @@ export const api = {
   },
 
   /* ------------------------
-     MOCK DATA
+       MOCK DATA
   ------------------------- */
   async mockFetch(endpoint) {
     await new Promise(r => setTimeout(r, 400));
