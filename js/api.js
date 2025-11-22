@@ -1,99 +1,160 @@
 import { state } from './state.js';
 import { showToast } from './ui.js';
 
+/* IMPORTANT:
+   Remove the trailing slash — makes URL building reliable.
+*/
 const BASE_URL = "https://movieapi.giftedtech.co.ke/api";
 
+function joinUrl(base, path) {
+  return base.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '');
+}
+
 export const api = {
+
+  /* ------------------------
+     GENERIC FETCH WRAPPER
+  ------------------------- */
   async fetch(endpoint) {
     if (state.mockMode) return this.mockFetch(endpoint);
+
+    const url = joinUrl(BASE_URL, endpoint);
+    console.log("%c[API] Request →", "color: dodgerblue; font-weight:bold", url);
 
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
 
-      const response = await fetch(`${BASE_URL}${endpoint}`, {
-        signal: controller.signal
+      const response = await fetch(url, {
+        method: "GET",
+        signal: controller.signal,
+        headers: {
+          "Accept": "application/json"
+        }
       });
 
       clearTimeout(timeout);
 
-      if (!response.ok) throw new Error("API Error " + response.status);
+      console.log("[API] Status:", response.status);
+
+      // Try to read body text anyway (if error)
+      if (!response.ok) {
+        let body = "";
+        try { body = await response.text(); } catch (_) {}
+
+        console.error(
+          "%c[API ERROR RESPONSE]",
+          "color:red;font-weight:bold",
+          {
+            status: response.status,
+            statusText: response.statusText,
+            url,
+            body
+          }
+        );
+
+        throw new Error("API Error " + response.status);
+      }
 
       return await response.json();
-    } catch (err) {
-      console.warn("API Error:", err);
+    }
+
+    catch (err) {
+      console.error(
+        "%c[API FETCH ERROR]",
+        "color:red;font-weight:bold",
+        err.message,
+        err
+      );
+
+      if (err.name === "AbortError") {
+        console.warn("Request aborted (timeout).");
+      }
+
       showToast("Network issue — using offline data", "error");
       return this.mockFetch(endpoint);
     }
   },
 
+  /* ------------------------
+     SEARCH
+  ------------------------- */
   async search(query) {
     const q = encodeURIComponent(query);
-    // According to docs: GET /api/search/{query}
-    const data = await this.fetch(`/search/${q}`);
+    const data = await this.fetch(`search/${q}`);
 
-    // Validate structure
-    const items = (data && data.results && Array.isArray(data.results.items))
+    const items = Array.isArray(data?.results?.items)
       ? data.results.items
       : [];
 
-    // Map items
-    const normalized = items.map(item => this.normalizeItem(item));
-    return { results: normalized };
+    return {
+      results: items.map(item => this.normalizeItem(item))
+    };
   },
 
+  /* ------------------------
+     INFO
+  ------------------------- */
   async getInfo(id) {
-    const data = await this.fetch(`/info/${id}`);
+    const data = await this.fetch(`info/${id}`);
 
-    // According to docs: data.results.subject
-    if (data && data.results && data.results.subject) {
+    if (data?.results?.subject) {
       return this.normalizeItem(data.results.subject);
     }
+
     return null;
   },
 
+  /* ------------------------
+     SOURCES
+  ------------------------- */
   async getSources(id, season = null, episode = null) {
-    // Docs: /api/sources/{id}?season=...&episode=...
-    let url = `/sources/${id}`;
+    let endpoint = `sources/${id}`;
+
     if (season && episode) {
-      url += `?season=${season}&episode=${episode}`;
-    }
-    const data = await this.fetch(url);
-
-    // According to docs: the response is `results` array
-    // The docs “Download Sources” section shows response with key "results".
-    if (data && Array.isArray(data.results)) {
-      return data.results.map(src => ({
-        quality: src.quality,
-        download: src.download_url,
-        stream: src.download_url || src.stream_url,
-        size: src.size,
-        format: src.format
-      }));
+      endpoint += `?season=${season}&episode=${episode}`;
     }
 
-    return [];
+    const data = await this.fetch(endpoint);
+
+    if (!Array.isArray(data?.results)) return [];
+
+    return data.results.map(src => ({
+      id: src.id || null,
+      quality: src.quality || "Unknown",
+      size: src.size || null,
+      format: src.format || null,
+
+      stream: src.download_url || null,
+      download: src.download_url || null,
+
+      raw: src
+    }));
   },
 
+  /* ------------------------
+     NORMALIZE ITEM
+  ------------------------- */
   normalizeItem(item) {
-    let poster = "assets/placeholder.jpg";
-    if (item.cover && item.cover.url) {
-      poster = item.cover.url;
-    } else if (item.poster) {
-      poster = item.poster;
-    } else if (item.image) {
-      poster = item.image;
-    }
+    let poster =
+      item?.cover?.url ||
+      item?.thumbnail ||
+      item?.poster ||
+      item?.image ||
+      "assets/placeholder.jpg";
 
     let year = "N/A";
+
     if (item.releaseDate) {
       year = item.releaseDate.split("-")[0];
     } else if (item.year) {
       year = item.year;
     }
 
-    const finalType = (item.subjectType === 1 || item.type === "series")
-      ? "series" : "movie";
+    let finalType =
+      item.subjectType === 2 || item.type === "series"
+        ? "series"
+        : "movie";
 
     return {
       id: item.subjectId || item.id,
@@ -106,6 +167,9 @@ export const api = {
     };
   },
 
+  /* ------------------------
+     MOCK DATA
+  ------------------------- */
   async mockFetch(endpoint) {
     await new Promise(r => setTimeout(r, 400));
 
@@ -120,6 +184,7 @@ export const api = {
         return await (await fetch("./mock/sources.json")).json();
       }
     } catch (e) {
+      console.warn("Failed to load mock data", e);
       return {};
     }
   }
